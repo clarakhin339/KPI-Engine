@@ -117,7 +117,7 @@ export function Sidebar({ open, onClose }: {open: boolean;onClose: () => void;})
                   cn(
                     'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors',
                     isActive ?
-                    'bg-accentsoft font-medium text-fg' :
+                    'bg-accentsoft font-medium text-accent' :
                     'text-fgmuted hover:bg-surface2 hover:text-fg'
                   )
                   }>

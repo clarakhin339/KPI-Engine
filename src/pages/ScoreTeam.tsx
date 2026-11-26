@@ -8,8 +8,17 @@ import { Select } from '../components/ui/Select';
 import { EvaluationDrawer } from '../components/evaluation/EvaluationDrawer';
 import { useApp } from '../lib/store';
 import { canEditEvaluation, scoringLabel } from '../lib/permissions';
-import type { Employee, Evaluation } from '../lib/types';
-import { formatDate, fullName } from '../lib/utils';
+import { bandFor } from '../lib/scoring';
+import type { Employee, Evaluation, Tone } from '../lib/types';
+import { cn, formatDate, fullName } from '../lib/utils';
+
+const toneText: Record<Tone, string> = {
+  positive: 'text-positive',
+  warning: 'text-warning',
+  danger: 'text-danger',
+  info: 'text-info',
+  neutral: 'text-fg'
+};
 
 interface Row {
   employee: Employee;
@@ -19,7 +28,7 @@ interface Row {
 }
 
 export function ScoreTeamPage() {
-  const { me, access, scorable, evaluations, activeCycle, teams, teamById, rankById, positionById } =
+  const { me, access, scorable, evaluations, activeCycle, teams, teamById, rankById, positionById, bands } =
   useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState('all');
@@ -86,11 +95,15 @@ export function ScoreTeamPage() {
     align: 'right',
     sortable: true,
     value: (r) => r.mine?.score ?? -1,
-    render: (r) =>
-    <span className="font-mono text-sm text-fg">
-          {r.mine ? r.mine.score : '—'}
-          {r.mine?.isDeduction && <span className="ml-1.5 text-danger" title="Marked as deduction">●</span>}
-        </span>
+    render: (r) => {
+      const band = r.mine ? bandFor(bands, r.mine.score) : undefined;
+      return (
+        <span className={cn('font-mono text-sm font-semibold', band ? toneText[band.tone] : 'text-fgsubtle')}>
+            {r.mine ? r.mine.score : '—'}
+            {r.mine?.isDeduction && <span className="ml-1.5 text-danger" title="Marked as deduction">●</span>}
+          </span>);
+
+    }
 
   },
   { key: 'status', header: 'Status', sortable: true, value: (r) => r.status, render: (r) => <StatusPill status={r.status} /> },

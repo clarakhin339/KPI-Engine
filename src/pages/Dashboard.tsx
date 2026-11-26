@@ -226,7 +226,8 @@ export function DashboardPage() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-fg">{nameOf(w.evaluatorId)}</span>
                         <span className="block truncate font-mono text-2xs text-fgsubtle">
-                          {Array.from(new Set(grantsOf(access, w.evaluatorId).map((g) => g.role.name))).join(', ')} · {w.pending} pending
+                          {Array.from(new Set(grantsOf(access, w.evaluatorId).map((g) => g.role.name))).join(', ')}
+                          <span className="text-warning"> · {w.pending} pending</span>
                         </span>
                       </span>
                       <Button size="small" variant="tertiary" onClick={() => remind([w])}>
