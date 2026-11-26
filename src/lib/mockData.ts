@@ -29,8 +29,8 @@ export const teams: Team[] = [
 { id: 't-1', name: 'Sales', branchId: 'b-1' },
 { id: 't-2', name: 'System', branchId: 'b-1' },
 { id: 't-3', name: 'People & Culture', branchId: 'b-1' },
-{ id: 't-4', name: 'Network', branchId: 'b-2' },
-{ id: 't-5', name: 'IP Core', branchId: 'b-2' },
+{ id: 't-4', name: 'Network_1CNG', branchId: 'b-1' },
+{ id: 't-5', name: 'Network_IPBB', branchId: 'b-2' },
 { id: 't-6', name: 'Management Office', branchId: 'b-1' }];
 
 
