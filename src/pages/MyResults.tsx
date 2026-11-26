@@ -72,6 +72,20 @@ export function MyResultsPage() {
                     </span>
                   }
                 </p>
+                {band &&
+              <div className="w-full">
+                  <p className="mono-label">Entitlements</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {band.benefit && <StatusPill status={band.benefit} tone="positive" />}
+                    {band.kpiBonus && <StatusPill status="KPI reward bonus" tone="info" />}
+                    {band.salaryIncrease && <StatusPill status="Salary increase" tone="info" />}
+                    {band.promotion && <StatusPill status="Promotion" tone="info" />}
+                    {!band.benefit && !band.kpiBonus && !band.salaryIncrease && !band.promotion &&
+                  <span className="text-sm text-fgmuted">None at this rating.</span>
+                  }
+                  </div>
+                </div>
+              }
               </div>
 
               {entries.length > 0 &&

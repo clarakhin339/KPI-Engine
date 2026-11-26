@@ -120,6 +120,11 @@ export interface ScoreBand {
   minScore: number;
   maxScore: number;
   tone: Tone;
+  /** Extra allowance granted at this band (e.g. "Excellence Allowance"), or null. */
+  benefit: string | null;
+  kpiBonus: boolean;
+  salaryIncrease: boolean;
+  promotion: boolean;
 }
 
 export interface ReviewSummary {

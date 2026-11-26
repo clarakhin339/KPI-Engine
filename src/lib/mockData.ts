@@ -207,9 +207,11 @@ export const cycles: EvaluationCycle[] = [
 
 /** Example bands from the HR draft — pending confirmation by management. */
 export const bands: ScoreBand[] = [
-{ id: 'sb-1', label: 'No Bonus', minScore: 0, maxScore: 49, tone: 'danger' },
-{ id: 'sb-2', label: 'Half Bonus', minScore: 50, maxScore: 79, tone: 'warning' },
-{ id: 'sb-3', label: 'Full Bonus', minScore: 80, maxScore: 100, tone: 'positive' }];
+{ id: 'sb-1', label: 'Unsatisfactory', minScore: 0, maxScore: 59, tone: 'danger', benefit: null, kpiBonus: false, salaryIncrease: false, promotion: false },
+{ id: 'sb-2', label: 'Needs Improvement', minScore: 60, maxScore: 69, tone: 'warning', benefit: null, kpiBonus: true, salaryIncrease: false, promotion: false },
+{ id: 'sb-3', label: 'Meets Expectations', minScore: 70, maxScore: 79, tone: 'neutral', benefit: null, kpiBonus: true, salaryIncrease: false, promotion: false },
+{ id: 'sb-4', label: 'Exceeds Expectations', minScore: 80, maxScore: 89, tone: 'info', benefit: 'Excellence Allowance', kpiBonus: true, salaryIncrease: true, promotion: true },
+{ id: 'sb-5', label: 'Excellent', minScore: 90, maxScore: 100, tone: 'positive', benefit: 'Excellence Allowance', kpiBonus: true, salaryIncrease: true, promotion: true }];
 
 
 /* ------------------------------------------------------------------ */

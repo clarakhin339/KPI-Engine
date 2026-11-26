@@ -95,7 +95,11 @@ export function ReportsPage() {
           rank: rankById(r.employee.rankId)?.name ?? '',
           ...Object.fromEntries(scoringRoles.map((role) => [role.name, r.byRole[role.id] ?? ''])),
           final_score: r.summary.finalScore ?? '',
-          band: r.band?.label ?? '',
+          rating: r.band?.label ?? '',
+          benefit: r.band?.benefit ?? 'not allow',
+          kpi_reward_bonus: r.band ? r.band.kpiBonus ? 'allow' : 'not allow' : '',
+          salary_increase: r.band ? r.band.salaryIncrease ? 'allow' : 'not allow' : '',
+          promotion: r.band ? r.band.promotion ? 'allow' : 'not allow' : '',
           evaluations: r.summary.evaluationCount,
           deductions: r.summary.deductionCount
         }))
@@ -142,10 +146,40 @@ export function ReportsPage() {
   },
   {
     key: 'band',
-    header: 'Band',
+    header: 'Rating',
     sortable: true,
     value: (r) => r.band?.label ?? '',
     render: (r) => r.band ? <StatusPill status={r.band.label} tone={r.band.tone} /> : <span className="text-fgsubtle">—</span>
+  },
+  {
+    key: 'benefit',
+    header: 'Benefit',
+    value: (r) => r.band?.benefit ?? '',
+    render: (r) => r.band?.benefit ?? <span className="text-fgsubtle">—</span>
+  },
+  {
+    key: 'kpi',
+    header: 'KPI bonus',
+    align: 'center',
+    value: (r) => (r.band?.kpiBonus ? 1 : 0),
+    render: (r) => r.band ? r.band.kpiBonus ? 'allow' : 'not allow' : '—',
+    defaultHidden: true
+  },
+  {
+    key: 'salary',
+    header: 'Salary increase',
+    align: 'center',
+    value: (r) => (r.band?.salaryIncrease ? 1 : 0),
+    render: (r) => r.band ? r.band.salaryIncrease ? 'allow' : 'not allow' : '—',
+    defaultHidden: true
+  },
+  {
+    key: 'promotion',
+    header: 'Promotion',
+    align: 'center',
+    value: (r) => (r.band?.promotion ? 1 : 0),
+    render: (r) => r.band ? r.band.promotion ? 'allow' : 'not allow' : '—',
+    defaultHidden: true
   },
   {
     key: 'deductions',
@@ -166,7 +200,7 @@ export function ReportsPage() {
       <PageHeader
         breadcrumb={['HR & management', 'Reports']}
         title="Cycle summary"
-        description="Final score and bonus band per employee. The final score is the average of all submitted evaluator scores."
+        description="Final score, rating band and entitlements per employee. The final score is the average of all submitted evaluator scores."
         meta={
         cycle && (
         cycle.status === 'closed' ?
