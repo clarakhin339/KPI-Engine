@@ -340,8 +340,9 @@ export function AppProvider({ children }: {children: React.ReactNode;}) {
       const match = employees.find(
         (e) => e.status === 'active' && e.email.toLowerCase() === email.trim().toLowerCase()
       );
-      if (!match) return false;
-      setCurrentUserId(match.id);
+      /* Demo mode: a recognised employee email signs in as that person; any other
+         email signs in as the default account, like the original prototype. */
+      setCurrentUserId(match?.id ?? employees[0].id);
       setAuthenticated(true);
       return true;
     },

@@ -87,7 +87,7 @@ extra: Partial<Employee> = {})
 }
 
 export const employees: Employee[] = [
-staff(1, 'Thiri', 'Aung', 'p-7', 'rk-5', 't-3', '2019-03-04'),
+staff(1, 'Khin', 'Khin', 'p-7', 'rk-5', 't-3', '2019-03-04', { email: 'khinkhin@1cloudng.com' }),
 staff(2, 'Kyaw', 'Zin', 'p-7', 'rk-3', 't-3', '2022-08-15'),
 staff(3, 'Min', 'Thant', 'p-6', 'rk-5', 't-6', '2018-11-01'),
 staff(4, 'Hnin', 'Wai', 'p-6', 'rk-4', 't-6', '2020-02-17'),

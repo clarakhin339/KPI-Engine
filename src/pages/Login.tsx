@@ -15,7 +15,7 @@ type Screen = 'login' | 'twofa' | 'forgot' | 'sent' | 'reset';
 export function LoginPage() {
   const { login } = useApp();
   const [screen, setScreen] = useState<Screen>('login');
-  const [email, setEmail] = useState('thiri.aung@1cloudng.com');
+  const [email, setEmail] = useState('khinkhin@1cloudng.com');
   const [password, setPassword] = useState('••••••••••');
   const [remember, setRemember] = useState(true);
   const [code, setCode] = useState('');
@@ -44,14 +44,7 @@ export function LoginPage() {
     }
     setError('');
     setLoading(true);
-    window.setTimeout(attemptLogin, 500);
-  };
-
-  const attemptLogin = () => {
-    if (!login(email)) {
-      setLoading(false);
-      setError('No account for this email — try thiri.aung@1cloudng.com (demo).');
-    }
+    window.setTimeout(() => login(email), 500);
   };
 
   return (
@@ -158,7 +151,7 @@ export function LoginPage() {
               </Button>
               <button
               type="button"
-              onClick={attemptLogin}
+              onClick={() => login(email)}
               className="mt-3 w-full text-center text-xs text-fgmuted underline underline-offset-2 hover:text-fg">
               
                 Use a recovery code instead
