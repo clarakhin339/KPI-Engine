@@ -44,7 +44,14 @@ export function LoginPage() {
     }
     setError('');
     setLoading(true);
-    window.setTimeout(() => login(email), 500);
+    window.setTimeout(attemptLogin, 500);
+  };
+
+  const attemptLogin = () => {
+    if (!login(email)) {
+      setLoading(false);
+      setError('No account for this email — try khinkhin@1cloudng.com (demo).');
+    }
   };
 
   return (
@@ -151,7 +158,7 @@ export function LoginPage() {
               </Button>
               <button
               type="button"
-              onClick={() => login(email)}
+              onClick={attemptLogin}
               className="mt-3 w-full text-center text-xs text-fgmuted underline underline-offset-2 hover:text-fg">
               
                 Use a recovery code instead
