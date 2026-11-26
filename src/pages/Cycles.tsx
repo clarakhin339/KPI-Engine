@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CalendarRangeIcon, LockIcon, PlusIcon } from 'lucide-react';
+import { useState, type ChangeEvent } from 'react';
+import { LockIcon, PlusIcon } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Panel } from '../components/common/Panel';
 import { DataTable, type Column } from '../components/common/DataTable';
@@ -9,162 +9,208 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from '../components/ui/Dialog';
 import { useApp } from '../lib/store';
-import type { CycleType, KpiCycle } from '../lib/types';
-import { formatDate, uid } from '../lib/utils';
-
-const TYPES: CycleType[] = ['Weekly', 'Monthly', 'Quarterly', 'Half-Yearly', 'Yearly', 'Custom'];
+import { expectedEvaluations } from '../lib/permissions';
+import type { EvaluationCycle } from '../lib/types';
+import { formatDate } from '../lib/utils';
 
 export function CyclesPage() {
-  const { cycles, setCycles, pushToast, logAction } = useApp();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({
-    name: '',
-    type: 'Quarterly' as CycleType,
-    startDate: '2026-10-01',
-    endDate: '2026-12-31',
-    dueDate: '2027-01-07',
-    lockDate: '2027-01-14'
-  });
+  const { cycles, activeCycle, access, evaluations, createCycle, activateCycle, closeCycle, pushToast } =
+  useApp();
 
-  const active = cycles.find((c) => c.status === 'active');
+  const latest = [...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
+  const suggestion = !latest ?
+  { half: 'H1' as const, year: new Date().getFullYear() } :
+  latest.half === 'H1' ?
+  { half: 'H2' as const, year: latest.year } :
+  { half: 'H1' as const, year: latest.year + 1 };
 
-  const columns: Column<KpiCycle>[] = [
+  const [createOpen, setCreateOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [half, setHalf] = useState<'H1' | 'H2'>(suggestion.half);
+  const [year, setYear] = useState(String(suggestion.year));
+  const [error, setError] = useState('');
+
+  const expected = expectedEvaluations(access);
+  const submitted = evaluations.filter((e) => e.cycleId === activeCycle?.id && e.status === 'submitted');
+  const submittedKeys = new Set(submitted.map((e) => `${e.evaluatorId}:${e.evaluateeId}`));
+  const missing = expected.filter((p) => !submittedKeys.has(`${p.evaluatorId}:${p.evaluateeId}`));
+  const unscored = new Set(expected.map((p) => p.evaluateeId));
+  submitted.forEach((e) => unscored.delete(e.evaluateeId));
+  const drafts = evaluations.filter((e) => e.cycleId === activeCycle?.id && e.status === 'draft').length;
+
+  const report = (failure: string | null, success: string) =>
+  pushToast(failure ? { title: failure, tone: 'danger' } : { title: success, tone: 'success' });
+
+  const columns: Column<EvaluationCycle>[] = [
+  { key: 'name', header: 'Cycle', sortable: true, pinned: true, value: (c) => c.name, render: (c) => <span className="font-medium text-fg">{c.name}</span> },
   {
-    key: 'name',
-    header: 'Cycle',
+    key: 'period',
+    header: 'Period',
     sortable: true,
-    pinned: true,
-    value: (c) => c.name,
+    value: (c) => c.startDate,
     render: (c) =>
-    <div className="min-w-0">
-          <p className="truncate font-medium text-fg">{c.name}</p>
-          <p className="truncate font-mono text-2xs text-fgsubtle">{c.type}</p>
-        </div>
-
-  },
-  { key: 'period', header: 'Period', value: (c) => c.startDate, render: (c) =>
     <span className="whitespace-nowrap text-xs text-fgmuted">
-        {formatDate(c.startDate)} → {formatDate(c.endDate)}
-      </span>
-  },
-  { key: 'due', header: 'Due', sortable: true, value: (c) => c.dueDate, render: (c) => formatDate(c.dueDate) },
-  { key: 'lock', header: 'Lock', sortable: true, value: (c) => c.lockDate, render: (c) =>
-    <span className="flex items-center gap-1 whitespace-nowrap text-sm text-fgmuted">
-        <LockIcon size={11} /> {formatDate(c.lockDate)}
-      </span>
-  },
-  { key: 'assignments', header: 'Assignments', align: 'right', sortable: true, value: (c) => c.assignmentCount, render: (c) =>
-    <span className="font-mono text-sm text-fgmuted">{c.assignmentCount}</span>
-  },
-  {
-    key: 'completion',
-    header: 'Completion',
-    sortable: true,
-    width: '160px',
-    value: (c) => c.completion,
-    render: (c) =>
-    <ScoreBar value={c.completion} max={100} tone={c.completion === 100 ? 'positive' : 'info'} showValue={false} />
+          {formatDate(c.startDate)} → {formatDate(c.endDate)}
+        </span>
 
   },
-  { key: 'status', header: 'Status', sortable: true, value: (c) => c.status, render: (c) => <StatusPill status={c.status} /> }];
+  { key: 'status', header: 'Status', sortable: true, value: (c) => c.status, render: (c) => <StatusPill status={c.status} /> },
+  {
+    key: 'closed',
+    header: 'Results published',
+    value: (c) => c.closedAt ?? '',
+    render: (c) =>
+    c.closedAt ?
+    <span className="flex items-center gap-1 whitespace-nowrap text-sm text-fgmuted">
+          <LockIcon size={11} /> {formatDate(c.closedAt)}
+        </span> :
+
+    <span className="text-fgsubtle">—</span>
+
+  },
+  {
+    key: 'action',
+    header: '',
+    align: 'right',
+    render: (c) =>
+    c.status === 'upcoming' ?
+    <Button size="small" variant="secondary" onClick={() => report(activateCycle(c.id), `${c.name} is open for scoring`)}>
+          Open for scoring
+        </Button> :
+    c.status === 'active' ?
+    <Button size="small" variant="destructive" onClick={() => setCloseOpen(true)}>
+          Close cycle
+        </Button> :
+    null
+  }];
 
 
   return (
     <>
       <PageHeader
-        breadcrumb={['KPI engine', 'Cycles']}
-        title="KPI cycles"
-        description="Periods that scope every assignment and score. Locked cycles are immutable — history is never deleted."
+        breadcrumb={['HR & management', 'Cycles']}
+        title="Evaluation cycles"
+        description="One cycle every six months. Only one cycle is open at a time; closing it locks every score and publishes the results."
         actions={
-        <Button size="small" leftIcon={<PlusIcon size={14} />} onClick={() => setOpen(true)}>
+        <Button
+          size="small"
+          leftIcon={<PlusIcon size={14} />}
+          onClick={() => {
+            setHalf(suggestion.half);
+            setYear(String(suggestion.year));
+            setError('');
+            setCreateOpen(true);
+          }}>
+          
             New cycle
           </Button>
         } />
       
 
-      {active &&
+      {activeCycle &&
       <Panel
-        title={`Active cycle · ${active.name}`}
-        description="Key dates and progress"
+        title={`Active cycle · ${activeCycle.name}`}
+        description={`${formatDate(activeCycle.startDate)} → ${formatDate(activeCycle.endDate)}`}
         className="mb-4"
-        actions={<CalendarRangeIcon size={15} className="text-fgsubtle" />}>
+        actions={
+        <Button size="small" variant="destructive" onClick={() => setCloseOpen(true)}>
+              Close cycle
+            </Button>
+        }>
         
-          <ol className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-          ['Start', active.startDate],
-          ['End', active.endDate],
-          ['Submission due', active.dueDate],
-          ['Lock', active.lockDate]].
-          map(([label, date], i) =>
-          <li key={label} className="relative rounded border border-line p-3">
-                <span className="mono-label">{label}</span>
-                <p className="mt-1 text-sm font-medium text-fg">{formatDate(date)}</p>
-                <span className="absolute right-3 top-3 font-mono text-2xs text-fgsubtle">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-              </li>
-          )}
-          </ol>
-          <div className="mt-3">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="mono-label">Completion</span>
-              <span className="font-mono text-xs text-fgmuted">{active.completion}%</span>
-            </div>
-            <ScoreBar value={active.completion} max={100} tone="info" showValue={false} />
+          <div className="mb-1 flex items-center justify-between">
+            <span className="mono-label">Evaluations submitted</span>
+            <span className="font-mono text-xs text-fgmuted">
+              {expected.length - missing.length} / {expected.length}
+            </span>
           </div>
+          <ScoreBar value={expected.length - missing.length} max={Math.max(1, expected.length)} tone="info" showValue={false} />
         </Panel>
       }
 
       <DataTable
         columns={columns}
-        rows={cycles}
+        rows={[...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate))}
         rowKey={(c) => c.id}
-        searchPlaceholder="Search cycles…"
-        searchValue={(c) => `${c.name} ${c.type}`}
-        groupOptions={[{ key: 'type', label: 'Cycle type', get: (c) => c.type }]} />
+        searchable={false} />
       
 
-      <Dialog isOpen={open} onClose={() => setOpen(false)} size="md">
+      <Dialog isOpen={createOpen} onClose={() => setCreateOpen(false)} size="md">
         <DialogHeader>
-          <h2 className="text-base font-semibold text-fg">New KPI cycle</h2>
+          <h2 className="text-base font-semibold text-fg">New evaluation cycle</h2>
           <p className="text-xs text-fgmuted">
-            Lock date freezes all scores; previous cycles remain readable forever.
+            H1 runs 1 Jan – 30 Jun, H2 runs 1 Jul – 31 Dec. The cycle starts as upcoming until you
+            open it for scoring.
           </p>
         </DialogHeader>
         <DialogContent>
-          <div className="space-y-3">
-            <Input label="Cycle name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Q4 2026 Performance" />
+          <div className="grid grid-cols-2 gap-3">
             <Select
-              label="Type"
-              options={TYPES.map((t) => ({ value: t, label: t }))}
-              value={draft.type}
-              onChange={(v) => setDraft({ ...draft, type: v as CycleType })} />
+              label="Half"
+              options={[
+              { value: 'H1', label: 'H1 (Jan – Jun)' },
+              { value: 'H2', label: 'H2 (Jul – Dec)' }]
+              }
+              value={half}
+              onChange={(v: unknown) => setHalf(v as 'H1' | 'H2')} />
             
-            <div className="grid grid-cols-2 gap-3">
-              <Input label="Start date" type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} />
-              <Input label="End date" type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
-              <Input label="Due date" type="date" value={draft.dueDate} onChange={(e) => setDraft({ ...draft, dueDate: e.target.value })} />
-              <Input label="Lock date" type="date" value={draft.lockDate} onChange={(e) => setDraft({ ...draft, lockDate: e.target.value })} />
-            </div>
+            <Input label="Year" type="number" value={year} onChange={(e: ChangeEvent<HTMLInputElement>) => setYear(e.target.value)} />
           </div>
+          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
         </DialogContent>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => setOpen(false)}>
+          <Button variant="secondary" onClick={() => setCreateOpen(false)}>
             Cancel
           </Button>
           <Button
             onClick={() => {
-              if (!draft.name.trim()) return;
-              setCycles((prev) => [
-              { id: uid('cy'), ...draft, status: 'draft', assignmentCount: 0, completion: 0 },
-              ...prev]
-              );
-              logAction('Created cycle', 'Settings', draft.name);
-              pushToast({ title: 'Cycle created', description: 'Publish assignments to activate it.', tone: 'success' });
-              setOpen(false);
+              const failure = createCycle(half, Number(year));
+              if (failure) {
+                setError(failure);
+                return;
+              }
+              pushToast({ title: `${half} ${year} created`, tone: 'success' });
+              setCreateOpen(false);
             }}>
             
             Create cycle
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      <Dialog isOpen={closeOpen && !!activeCycle} onClose={() => setCloseOpen(false)} size="md">
+        <DialogHeader>
+          <h2 className="text-base font-semibold text-fg">Close {activeCycle?.name}?</h2>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-sm text-fg">
+            Closing locks every evaluation, calculates final scores and publishes results to
+            employees and management. This cannot be undone.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-sm">
+            <li className={missing.length > 0 ? 'text-danger' : 'text-fgmuted'}>
+              {missing.length} expected evaluation{missing.length === 1 ? ' has' : 's have'} not been submitted
+            </li>
+            <li className={unscored.size > 0 ? 'text-danger' : 'text-fgmuted'}>
+              {unscored.size} employee{unscored.size === 1 ? '' : 's'} would be published without any score
+            </li>
+            <li className="text-fgmuted">
+              {drafts} draft{drafts === 1 ? '' : 's'} will be discarded from the results
+            </li>
+          </ul>
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setCloseOpen(false)}>
+            Keep open
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (activeCycle) report(closeCycle(activeCycle.id), `${activeCycle.name} closed · results published`);
+              setCloseOpen(false);
+            }}>
+            
+            Close cycle & publish
           </Button>
         </DialogFooter>
       </Dialog>

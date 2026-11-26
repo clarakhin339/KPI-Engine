@@ -1,4 +1,3 @@
-import React from 'react';
 import { cn } from '../../lib/utils';
 
 export type Tone = 'positive' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -23,6 +22,7 @@ export const statusTone: Record<string, Tone> = {
   inactive: 'neutral',
   skipped: 'neutral',
   scheduled: 'info',
+  upcoming: 'info',
   submitted: 'info',
   'in-review': 'info',
   invited: 'info',

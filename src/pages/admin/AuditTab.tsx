@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { DownloadIcon } from 'lucide-react';
-import { PageHeader } from '../components/common/PageHeader';
-import { DataTable, type Column } from '../components/common/DataTable';
-import { StatusPill } from '../components/common/StatusPill';
-import { StatCard } from '../components/common/StatCard';
-import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Select';
-import { useApp } from '../lib/store';
-import type { AuditLog } from '../lib/types';
-import { download, formatDateTime, initials, toCsv } from '../lib/utils';
+import { DataTable, type Column } from '../../components/common/DataTable';
+import { StatCard } from '../../components/common/StatCard';
+import { StatusPill } from '../../components/common/StatusPill';
+import { Button } from '../../components/ui/Button';
+import { Select } from '../../components/ui/Select';
+import { useApp } from '../../lib/store';
+import type { AuditLog } from '../../lib/types';
+import { download, formatDateTime, initials, toCsv } from '../../lib/utils';
 
-export function AuditLogsPage() {
-  const { auditLogs, userById, pushToast } = useApp();
+export function AuditTab() {
+  const { auditLogs, nameOf, employeeById, pushToast, logAction } = useApp();
   const [severity, setSeverity] = useState('all');
   const [module, setModule] = useState('all');
 
@@ -33,14 +32,15 @@ export function AuditLogsPage() {
     key: 'actor',
     header: 'Actor',
     sortable: true,
-    value: (l) => userById(l.actorId)?.name ?? '',
+    value: (l) => nameOf(l.actorId),
     render: (l) =>
     <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-surface2 font-mono text-[9px] text-fg">
-            {initials(userById(l.actorId)?.name ?? '?')}
-          </span>
-          <span className="truncate text-sm text-fg">{userById(l.actorId)?.name}</span>
-        </div>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-surface2 font-mono text-[9px] text-fg">
+          {initials(nameOf(l.actorId))}
+        </span>
+        <span className="truncate text-sm text-fg">{nameOf(l.actorId)}</span>
+        {employeeById(l.actorId)?.external && <StatusPill status="external" tone="info" />}
+      </div>
 
   },
   { key: 'action', header: 'Action', sortable: true, value: (l) => l.action },
@@ -50,9 +50,6 @@ export function AuditLogsPage() {
   { key: 'entity', header: 'Entity', value: (l) => l.entity, render: (l) =>
     <span className="font-mono text-xs text-fgmuted">{l.entity}</span>
   },
-  { key: 'ip', header: 'IP address', value: (l) => l.ip, render: (l) =>
-    <span className="font-mono text-xs text-fgsubtle">{l.ip}</span>,
-    defaultHidden: true },
   {
     key: 'severity',
     header: 'Severity',
@@ -68,37 +65,39 @@ export function AuditLogsPage() {
 
 
   return (
-    <>
-      <PageHeader
-        breadcrumb={['Administration', 'Audit logs']}
-        title="Audit trail"
-        description="Append-only record of authentication, configuration, score and approval events."
-        actions={
+    <div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-fg">Audit trail</h2>
+          <p className="mt-0.5 text-xs text-fgmuted">
+            Record of sign-ins, configuration changes, score submissions and revisions.
+          </p>
+        </div>
         <Button
           variant="secondary"
           size="small"
           leftIcon={<DownloadIcon size={14} />}
           onClick={() => {
-            download('audit-log.csv', toCsv(rows.map((l) => ({ ...l, actor: userById(l.actorId)?.name ?? '' }))));
+            download('audit-log.csv', toCsv(rows.map((l) => ({ ...l, actor: nameOf(l.actorId) }))));
+            logAction('Exported audit log', 'Audit', `${rows.length} rows`);
             pushToast({ title: 'Audit log exported', tone: 'success' });
           }}>
           
-            Export
-          </Button>
-        } />
-      
+          Export
+        </Button>
+      </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Events (30 days)" value={String(auditLogs.length)} hint="all modules" />
+        <StatCard label="Recorded events" value={String(auditLogs.length)} hint="since go-live" />
+        <StatCard
+          label="Warnings"
+          value={String(auditLogs.filter((l) => l.severity === 'warning').length)}
+          hint="config and role changes" />
+        
         <StatCard
           label="Critical events"
           value={String(auditLogs.filter((l) => l.severity === 'critical').length)}
-          hint="require review" />
-        
-        <StatCard
-          label="Score overrides"
-          value={String(auditLogs.filter((l) => l.action.toLowerCase().includes('overrode')).length)}
-          hint="reviewer adjustments" />
+          hint="cycle closes & revisions" />
         
       </div>
 
@@ -107,7 +106,7 @@ export function AuditLogsPage() {
         rows={rows}
         rowKey={(l) => l.id}
         searchPlaceholder="Search actions, entities or actors…"
-        searchValue={(l) => `${l.action} ${l.entity} ${l.module} ${userById(l.actorId)?.name}`}
+        searchValue={(l) => `${l.action} ${l.entity} ${l.module} ${nameOf(l.actorId)}`}
         pageSize={12}
         dense
         groupOptions={[
@@ -125,19 +124,19 @@ export function AuditLogsPage() {
               { value: 'critical', label: 'Critical' }]
               }
               value={severity}
-              onChange={(v) => setSeverity(v as string)} />
+              onChange={(v: string) => setSeverity(v)} />
             
             </div>
             <div className="w-48">
               <Select
               options={[{ value: 'all', label: 'All modules' }, ...modules.map((m) => ({ value: m, label: m }))]}
               value={module}
-              onChange={(v) => setModule(v as string)} />
+              onChange={(v: string) => setModule(v)} />
             
             </div>
           </>
         } />
       
-    </>);
+    </div>);
 
 }

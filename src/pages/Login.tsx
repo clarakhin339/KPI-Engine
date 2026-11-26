@@ -9,15 +9,13 @@ import {
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useApp } from '../lib/store';
-import { sessions } from '../lib/mockData';
-import { cn } from '../lib/utils';
 
 type Screen = 'login' | 'twofa' | 'forgot' | 'sent' | 'reset';
 
 export function LoginPage() {
   const { login } = useApp();
   const [screen, setScreen] = useState<Screen>('login');
-  const [email, setEmail] = useState('daniel.reyes@northwind.io');
+  const [email, setEmail] = useState('thiri.aung@1cloudng.com');
   const [password, setPassword] = useState('••••••••••');
   const [remember, setRemember] = useState(true);
   const [code, setCode] = useState('');
@@ -46,7 +44,14 @@ export function LoginPage() {
     }
     setError('');
     setLoading(true);
-    window.setTimeout(() => login(email), 500);
+    window.setTimeout(attemptLogin, 500);
+  };
+
+  const attemptLogin = () => {
+    if (!login(email)) {
+      setLoading(false);
+      setError('No account for this email — try thiri.aung@1cloudng.com (demo).');
+    }
   };
 
   return (
@@ -153,7 +158,7 @@ export function LoginPage() {
               </Button>
               <button
               type="button"
-              onClick={() => login(email)}
+              onClick={attemptLogin}
               className="mt-3 w-full text-center text-xs text-fgmuted underline underline-offset-2 hover:text-fg">
               
                 Use a recovery code instead

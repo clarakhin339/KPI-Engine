@@ -45,11 +45,55 @@ export function download(filename: string, content: string) {
 export function toCsv(rows: Record<string, unknown>[]) {
   if (!rows.length) return '';
   const headers = Object.keys(rows[0]);
-  const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const escape = (v: unknown) => {
+    const text = String(v ?? '');
+    const safe = typeof v === 'string' && /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   return [
   headers.join(','),
   ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].
   join('\n');
+}
+
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (ch === '"') quoted = false;else
+      cell += ch;
+    } else if (ch === '"') quoted = true;else
+    if (ch === ',') {
+      row.push(cell.trim());
+      cell = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell.trim());
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else cell += ch;
+  }
+  if (cell || row.length) {
+    row.push(cell.trim());
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((c) => c !== ''));
+}
+
+export function fullName(person: {firstName: string;lastName: string;} | undefined) {
+  return person ? `${person.firstName} ${person.lastName}`.trim() : '—';
+}
+
+export function today() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export function uid(prefix: string) {

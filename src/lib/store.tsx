@@ -1,29 +1,31 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState } from
-'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as seed from './mockData';
+import {
+  canEditEvaluation,
+  hasCapability,
+  scorableEmployees,
+  scoringGrant,
+  type AccessData } from
+'./permissions';
+import { isValidScore, summarise } from './scoring';
 import type {
   AppNotification,
-  Assessment,
-  Assignment,
   AuditLog,
-  KpiCategory,
-  KpiCycle,
-  KpiTemplate,
-  ModuleKey,
-  OrgNode,
-  PermissionAction,
-  RatingScale,
+  Branch,
+  Capability,
+  Employee,
+  Evaluation,
+  EvaluationCycle,
+  ID,
+  Position,
+  Rank,
+  ReviewSummary,
   Role,
-  User,
-  Workflow } from
+  RoleAssignment,
+  ScoreBand,
+  Team } from
 './types';
-import { uid } from './utils';
+import { fullName, uid } from './utils';
 
 interface Toast {
   id: string;
@@ -38,57 +40,82 @@ interface Branding {
   locale: string;
   timezone: string;
   dateFormat: string;
-  density: 'comfortable' | 'compact';
 }
+
+export interface EvaluationInput {
+  score: number;
+  comment: string;
+  isDeduction: boolean;
+}
+
+type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 
 interface AppState {
   /* auth */
   authenticated: boolean;
-  currentUser: User;
-  login: (email: string) => void;
+  me: Employee;
+  login: (email: string) => boolean;
   logout: () => void;
-  switchUser: (userId: string) => void;
+  viewAs: (employeeId: ID) => void;
 
   /* theme */
   theme: 'light' | 'dark';
   toggleTheme: () => void;
 
   /* data */
-  users: User[];
+  branches: Branch[];
+  teams: Team[];
+  ranks: Rank[];
+  positions: Position[];
+  employees: Employee[];
   roles: Role[];
-  orgNodes: OrgNode[];
-  categories: KpiCategory[];
-  cycles: KpiCycle[];
-  templates: KpiTemplate[];
-  assignments: Assignment[];
-  assessments: Assessment[];
-  scales: RatingScale[];
-  workflows: Workflow[];
+  assignments: RoleAssignment[];
+  cycles: EvaluationCycle[];
+  evaluations: Evaluation[];
+  bands: ScoreBand[];
   auditLogs: AuditLog[];
   notifications: AppNotification[];
   branding: Branding;
 
-  /* mutations */
-  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-  setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
-  setOrgNodes: React.Dispatch<React.SetStateAction<OrgNode[]>>;
-  setCategories: React.Dispatch<React.SetStateAction<KpiCategory[]>>;
-  setCycles: React.Dispatch<React.SetStateAction<KpiCycle[]>>;
-  setTemplates: React.Dispatch<React.SetStateAction<KpiTemplate[]>>;
-  setAssignments: React.Dispatch<React.SetStateAction<Assignment[]>>;
-  setAssessments: React.Dispatch<React.SetStateAction<Assessment[]>>;
-  setScales: React.Dispatch<React.SetStateAction<RatingScale[]>>;
-  setWorkflows: React.Dispatch<React.SetStateAction<Workflow[]>>;
-  setBranding: React.Dispatch<React.SetStateAction<Branding>>;
+  /* configuration (admin screens) */
+  setBranches: Setter<Branch[]>;
+  setTeams: Setter<Team[]>;
+  setRanks: Setter<Rank[]>;
+  setPositions: Setter<Position[]>;
+  setEmployees: Setter<Employee[]>;
+  setRoles: Setter<Role[]>;
+  setAssignments: Setter<RoleAssignment[]>;
+  setBands: Setter<ScoreBand[]>;
+  setBranding: Setter<Branding>;
+
+  /* access */
+  access: AccessData;
+  can: (capability: Capability) => boolean;
+  activeCycle: EvaluationCycle | undefined;
+  scorable: Employee[];
+
+  /* evaluation & cycle actions — each returns an error message, or null on success */
+  saveEvaluation: (evaluateeId: ID, input: EvaluationInput, submit: boolean) => string | null;
+  reviseEvaluation: (evaluationId: ID, input: EvaluationInput, reason: string) => string | null;
+  createCycle: (half: 'H1' | 'H2', year: number) => string | null;
+  activateCycle: (cycleId: ID) => string | null;
+  closeCycle: (cycleId: ID) => string | null;
+  summaryFor: (cycleId: ID, employeeId: ID) => ReviewSummary;
+
+  /* platform */
+  notify: (n: Pick<AppNotification, 'type' | 'title' | 'body' | 'employeeId'>) => void;
   markNotificationsRead: () => void;
   logAction: (action: string, module: string, entity: string, severity?: AuditLog['severity']) => void;
 
-  /* rbac */
-  can: (module: ModuleKey, action: PermissionAction) => boolean;
-
-  /* helpers */
-  userById: (id: string | null | undefined) => User | undefined;
-  orgById: (id: string | null | undefined) => OrgNode | undefined;
+  /* lookups */
+  employeeById: (id: ID | null | undefined) => Employee | undefined;
+  nameOf: (id: ID | null | undefined) => string;
+  teamById: (id: ID | null | undefined) => Team | undefined;
+  branchById: (id: ID | null | undefined) => Branch | undefined;
+  rankById: (id: ID | null | undefined) => Rank | undefined;
+  positionById: (id: ID | null | undefined) => Position | undefined;
+  roleById: (id: ID | null | undefined) => Role | undefined;
+  bandById: (id: ID | null | undefined) => ScoreBand | undefined;
 
   /* toasts */
   toasts: Toast[];
@@ -100,36 +127,42 @@ const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: {children: React.ReactNode;}) {
   const [authenticated, setAuthenticated] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState('u-2');
+  const [currentUserId, setCurrentUserId] = useState('e-1');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  const [users, setUsers] = useState<User[]>(seed.users);
+  const [branches, setBranches] = useState<Branch[]>(seed.branches);
+  const [teams, setTeams] = useState<Team[]>(seed.teams);
+  const [ranks, setRanks] = useState<Rank[]>(seed.ranks);
+  const [positions, setPositions] = useState<Position[]>(seed.positions);
+  const [employees, setEmployees] = useState<Employee[]>(seed.employees);
   const [roles, setRoles] = useState<Role[]>(seed.roles);
-  const [orgNodes, setOrgNodes] = useState<OrgNode[]>(seed.orgNodes);
-  const [categories, setCategories] = useState<KpiCategory[]>(seed.categories);
-  const [cycles, setCycles] = useState<KpiCycle[]>(seed.cycles);
-  const [templates, setTemplates] = useState<KpiTemplate[]>(seed.templates);
-  const [assignments, setAssignments] = useState<Assignment[]>(seed.assignments);
-  const [assessments, setAssessments] = useState<Assessment[]>(seed.assessments);
-  const [scales, setScales] = useState<RatingScale[]>(seed.scales);
-  const [workflows, setWorkflows] = useState<Workflow[]>(seed.workflows);
+  const [assignments, setAssignments] = useState<RoleAssignment[]>(seed.assignments);
+  const [cycles, setCycles] = useState<EvaluationCycle[]>(seed.cycles);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>(seed.evaluations);
+  const [bands, setBands] = useState<ScoreBand[]>(seed.bands);
+  const [summaries, setSummaries] = useState<ReviewSummary[]>(seed.summaries);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(seed.auditLogs);
-  const [notifications, setNotifications] = useState<AppNotification[]>(seed.notifications);
+  const [allNotifications, setNotifications] = useState<AppNotification[]>(seed.notifications);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [branding, setBranding] = useState<Branding>({
     companyName: 'One Cloud Next Gen',
-    productName: 'KPI Engine',
+    productName: 'KPI Evaluation',
     locale: 'en-GB',
-    timezone: 'Asia/Jakarta',
-    dateFormat: 'DD MMM YYYY',
-    density: 'comfortable'
+    timezone: 'Asia/Yangon',
+    dateFormat: 'DD MMM YYYY'
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  const currentUser = users.find((u) => u.id === currentUserId) ?? users[0];
+  const me = employees.find((e) => e.id === currentUserId) ?? employees[0];
+  const access: AccessData = { employees, roles, assignments };
+  const activeCycle = cycles.find((c) => c.status === 'active');
+  const can = (capability: Capability) => hasCapability(access, me.id, capability);
+
+  const employeeById = (id: ID | null | undefined) => employees.find((e) => e.id === id);
+  const nameOf = (id: ID | null | undefined) => fullName(employeeById(id));
 
   const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = uid('toast');
@@ -141,105 +174,231 @@ export function AppProvider({ children }: {children: React.ReactNode;}) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const logAction = useCallback(
-    (action: string, module: string, entity: string, severity: AuditLog['severity'] = 'info') => {
-      setAuditLogs((prev) => [
-      {
-        id: uid('al'),
-        at: new Date().toISOString(),
-        actorId: currentUserId,
-        action,
-        module,
-        entity,
-        ip: '103.28.14.9',
-        severity
-      },
-      ...prev]
-      );
-    },
-    [currentUserId]
-  );
+  const logAction: AppState['logAction'] = (action, module, entity, severity = 'info') => {
+    setAuditLogs((prev) => [
+    { id: uid('al'), at: new Date().toISOString(), actorId: me.id, action, module, entity, severity },
+    ...prev]
+    );
+  };
 
-  const can = useCallback(
-    (module: ModuleKey, action: PermissionAction) => {
-      const role = roles.find((r) => r.id === currentUser?.roleId);
-      if (!role) return false;
-      return (role.permissions[module] ?? []).includes(action);
-    },
-    [roles, currentUser]
-  );
+  const notify: AppState['notify'] = (n) => {
+    setNotifications((prev) => [
+    { ...n, id: uid('n'), at: new Date().toISOString(), read: false },
+    ...prev]
+    );
+  };
 
-  const value = useMemo<AppState>(
-    () => ({
-      authenticated,
-      currentUser,
-      login: (email: string) => {
-        const match = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-        if (match) setCurrentUserId(match.id);
-        setAuthenticated(true);
-      },
-      logout: () => setAuthenticated(false),
-      switchUser: (id: string) => setCurrentUserId(id),
-      theme,
-      toggleTheme: () => setTheme((t) => t === 'light' ? 'dark' : 'light'),
-      users,
-      roles,
-      orgNodes,
-      categories,
-      cycles,
-      templates,
-      assignments,
-      assessments,
-      scales,
-      workflows,
-      auditLogs,
-      notifications,
-      branding,
-      setUsers,
-      setRoles,
-      setOrgNodes,
-      setCategories,
-      setCycles,
-      setTemplates,
-      setAssignments,
-      setAssessments,
-      setScales,
-      setWorkflows,
-      setBranding,
-      markNotificationsRead: () =>
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))),
-      logAction,
-      can,
-      userById: (id) => users.find((u) => u.id === id),
-      orgById: (id) => orgNodes.find((o) => o.id === id),
-      toasts,
-      pushToast,
-      dismissToast
-    }),
-    [
+  const validate = (input: EvaluationInput, requireComment: boolean) => {
+    if (!isValidScore(input.score)) return 'Enter a score between 0 and 100.';
+    if (requireComment && !input.comment.trim()) return 'A comment is required.';
+    return null;
+  };
+
+  const saveEvaluation: AppState['saveEvaluation'] = (evaluateeId, input, submit) => {
+    if (!activeCycle) return 'There is no active cycle.';
+    const grant = scoringGrant(access, me.id, employeeById(evaluateeId));
+    if (!grant) return 'You are not allowed to score this employee.';
+    const invalid = validate(input, submit);
+    if (invalid) return invalid;
+
+    const existing = evaluations.find(
+      (e) =>
+      e.cycleId === activeCycle.id && e.evaluateeId === evaluateeId && e.evaluatorId === me.id
+    );
+    if (existing && !canEditEvaluation(access, me.id, existing, activeCycle)) {
+      return 'This entry is final and can no longer be changed.';
+    }
+
+    const now = new Date().toISOString();
+    const comment = input.comment.trim();
+    const status = submit || existing?.status === 'submitted' ? 'submitted' : 'draft';
+    const next: Evaluation = {
+      id: existing?.id ?? uid('ev'),
+      cycleId: activeCycle.id,
+      evaluateeId,
+      evaluatorId: me.id,
+      roleId: existing?.roleId ?? grant.role.id,
+      score: input.score,
+      isDeduction: input.isDeduction,
+      comment,
+      commentDate: existing && existing.comment === comment ? existing.commentDate : now,
+      lastModified: now,
+      status
+    };
+    setEvaluations((prev) =>
+    existing ? prev.map((e) => e.id === existing.id ? next : e) : [next, ...prev]
+    );
+    logAction(
+      status === 'draft' ? 'Saved draft evaluation' : existing?.status === 'submitted' ? 'Updated evaluation' : 'Submitted evaluation',
+      'Evaluations',
+      `${activeCycle.name} · ${nameOf(evaluateeId)}`
+    );
+    return null;
+  };
+
+  const reviseEvaluation: AppState['reviseEvaluation'] = (evaluationId, input, reason) => {
+    const existing = evaluations.find((e) => e.id === evaluationId);
+    if (!existing) return 'Entry not found.';
+    const cycle = cycles.find((c) => c.id === existing.cycleId);
+    if (existing.evaluatorId === me.id || !canEditEvaluation(access, me.id, existing, cycle)) {
+      return 'You are not allowed to revise this entry.';
+    }
+    const invalid = validate(input, true);
+    if (invalid) return invalid;
+    if (!reason.trim()) return 'A reason is required when revising another evaluator’s entry.';
+
+    const now = new Date().toISOString();
+    const comment = input.comment.trim();
+    setEvaluations((prev) =>
+    prev.map((e) =>
+    e.id === evaluationId ?
+    {
+      ...e,
+      score: input.score,
+      isDeduction: input.isDeduction,
+      comment,
+      commentDate: e.comment === comment ? e.commentDate : now,
+      lastModified: now,
+      revisedById: me.id
+    } :
+    e
+    )
+    );
+    logAction(
+      'Revised evaluation',
+      'Evaluations',
+      `${cycle?.name} · ${nameOf(existing.evaluateeId)} (entry by ${nameOf(existing.evaluatorId)}) · ${existing.score} → ${input.score} · Reason: ${reason.trim()}`,
+      'warning'
+    );
+    return null;
+  };
+
+  const createCycle: AppState['createCycle'] = (half, year) => {
+    if (!can('manage')) return 'Only HR can manage cycles.';
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) return 'Enter a valid year.';
+    if (cycles.some((c) => c.half === half && c.year === year)) return `${half} ${year} already exists.`;
+    const cycle: EvaluationCycle = {
+      id: uid('cy'),
+      name: `${half} ${year}`,
+      half,
+      year,
+      startDate: half === 'H1' ? `${year}-01-01` : `${year}-07-01`,
+      endDate: half === 'H1' ? `${year}-06-30` : `${year}-12-31`,
+      status: 'upcoming'
+    };
+    setCycles((prev) => [...prev, cycle]);
+    logAction('Created cycle', 'Cycles', cycle.name);
+    return null;
+  };
+
+  const activateCycle: AppState['activateCycle'] = (cycleId) => {
+    if (!can('manage')) return 'Only HR can manage cycles.';
+    const cycle = cycles.find((c) => c.id === cycleId);
+    if (!cycle || cycle.status !== 'upcoming') return 'Only an upcoming cycle can be opened.';
+    if (activeCycle) return `Close ${activeCycle.name} before opening another cycle.`;
+    setCycles((prev) => prev.map((c) => c.id === cycleId ? { ...c, status: 'active' } : c));
+    logAction('Activated cycle', 'Cycles', cycle.name);
+    notify({
+      type: 'cycle',
+      title: `${cycle.name} is open for scoring`,
+      body: 'The evaluation cycle is active. Scores and comments can be entered until HR closes the cycle.',
+      employeeId: null
+    });
+    return null;
+  };
+
+  const closeCycle: AppState['closeCycle'] = (cycleId) => {
+    if (!can('manage')) return 'Only HR can manage cycles.';
+    const cycle = cycles.find((c) => c.id === cycleId);
+    if (!cycle || cycle.status !== 'active') return 'Only the active cycle can be closed.';
+    const closedAt = new Date().toISOString();
+    const published = employees.
+    filter((e) => !e.external && e.status === 'active').
+    map((e) => summarise(cycleId, e.id, evaluations, bands));
+    setSummaries((prev) => [...prev.filter((s) => s.cycleId !== cycleId), ...published]);
+    setCycles((prev) =>
+    prev.map((c) => c.id === cycleId ? { ...c, status: 'closed', closedAt } : c)
+    );
+    logAction('Closed cycle', 'Cycles', `${cycle.name} · results published`, 'critical');
+    notify({
+      type: 'result',
+      title: `${cycle.name} results published`,
+      body: `Your final score and comments for ${cycle.name} are available under My Results.`,
+      employeeId: null
+    });
+    return null;
+  };
+
+  const summaryFor: AppState['summaryFor'] = (cycleId, employeeId) =>
+  summaries.find((s) => s.cycleId === cycleId && s.employeeId === employeeId) ??
+  summarise(cycleId, employeeId, evaluations, bands);
+
+  const value: AppState = {
     authenticated,
-    currentUser,
+    me,
+    login: (email) => {
+      const match = employees.find(
+        (e) => e.status === 'active' && e.email.toLowerCase() === email.trim().toLowerCase()
+      );
+      if (!match) return false;
+      setCurrentUserId(match.id);
+      setAuthenticated(true);
+      return true;
+    },
+    logout: () => setAuthenticated(false),
+    viewAs: setCurrentUserId,
     theme,
-    users,
+    toggleTheme: () => setTheme((t) => t === 'light' ? 'dark' : 'light'),
+    branches,
+    teams,
+    ranks,
+    positions,
+    employees,
     roles,
-    orgNodes,
-    categories,
-    cycles,
-    templates,
     assignments,
-    assessments,
-    scales,
-    workflows,
+    cycles,
+    evaluations,
+    bands,
     auditLogs,
-    notifications,
+    notifications: allNotifications.filter((n) => n.employeeId === null || n.employeeId === me.id),
     branding,
-    toasts,
-    logAction,
+    setBranches,
+    setTeams,
+    setRanks,
+    setPositions,
+    setEmployees,
+    setRoles,
+    setAssignments,
+    setBands,
+    setBranding,
+    access,
     can,
+    activeCycle,
+    scorable: activeCycle ? scorableEmployees(access, me.id) : [],
+    saveEvaluation,
+    reviseEvaluation,
+    createCycle,
+    activateCycle,
+    closeCycle,
+    summaryFor,
+    notify,
+    markNotificationsRead: () =>
+    setNotifications((prev) =>
+    prev.map((n) => n.employeeId === null || n.employeeId === me.id ? { ...n, read: true } : n)
+    ),
+    logAction,
+    employeeById,
+    nameOf,
+    teamById: (id) => teams.find((t) => t.id === id),
+    branchById: (id) => branches.find((b) => b.id === id),
+    rankById: (id) => ranks.find((r) => r.id === id),
+    positionById: (id) => positions.find((p) => p.id === id),
+    roleById: (id) => roles.find((r) => r.id === id),
+    bandById: (id) => bands.find((b) => b.id === id),
+    toasts,
     pushToast,
-    dismissToast]
-
-  );
+    dismissToast
+  };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

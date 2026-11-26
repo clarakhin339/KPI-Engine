@@ -1,331 +1,245 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis } from
-'recharts';
-import {
-  ClipboardListIcon,
-  ClockIcon,
-  GaugeIcon,
-  TrophyIcon,
-  UsersIcon } from
-'lucide-react';
+import { BellRingIcon, ClipboardListIcon, GaugeIcon, TriangleAlertIcon, UsersIcon } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatCard } from '../components/common/StatCard';
 import { Panel } from '../components/common/Panel';
 import { ScoreBar, StatusPill } from '../components/common/StatusPill';
 import { Button } from '../components/ui/Button';
 import { useApp } from '../lib/store';
-import { departmentPerformance, distribution, scoreTrend } from '../lib/mockData';
-import { formatDate, initials } from '../lib/utils';
-
-const axisProps = {
-  stroke: 'var(--fg-subtle)',
-  fontSize: 11,
-  tickLine: false,
-  axisLine: { stroke: 'var(--line)' }
-};
-
-const tooltipStyle = {
-  backgroundColor: 'var(--surface)',
-  border: '1px solid var(--line)',
-  borderRadius: 6,
-  fontSize: 12,
-  color: 'var(--fg)'
-};
-
-const heatmap = [
-{ name: 'Amara Okafor', scores: [4.4, 4.5, 4.6, 4.6, 4.7] },
-{ name: 'Priya Nair', scores: [4.0, 4.2, 4.3, 4.4, 4.5] },
-{ name: 'Marcus Feld', scores: [3.8, 3.9, 4.1, 4.2, 4.3] },
-{ name: 'Tobias Meyer', scores: [4.2, 4.3, 4.4, 4.5, 4.6] },
-{ name: 'Yuki Tanaka', scores: [3.4, 3.6, 3.8, 4.0, 4.2] },
-{ name: 'Ibrahim Sesay', scores: [2.9, 3.0, 3.1, 2.8, 3.1] }];
-
-
-function heatTone(v: number) {
-  if (v >= 4.4) return 'var(--positive)';
-  if (v >= 3.8) return 'var(--info)';
-  if (v >= 3.2) return 'var(--warning)';
-  return 'var(--danger)';
-}
+import { expectedEvaluations, grantsOf, scoringLabel } from '../lib/permissions';
+import { formatDate, fullName } from '../lib/utils';
 
 export function DashboardPage() {
-  const { assessments, userById, cycles, currentUser } = useApp();
+  const {
+    me,
+    can,
+    access,
+    activeCycle,
+    evaluations,
+    scorable,
+    teams,
+    roles,
+    nameOf,
+    notify,
+    pushToast
+  } = useApp();
 
-  const activeCycle = cycles.find((c) => c.status === 'active');
-  const pending = assessments.filter((a) => ['submitted', 'in-review'].includes(a.status));
-  const completed = assessments.filter((a) => a.status === 'approved');
-  const avg =
-  assessments.filter((a) => a.selfScore > 0).reduce((s, a) => s + a.selfScore, 0) /
-  Math.max(1, assessments.filter((a) => a.selfScore > 0).length);
+  const inCycle = evaluations.filter((e) => e.cycleId === activeCycle?.id);
+  const submittedKeys = new Set(
+    inCycle.filter((e) => e.status === 'submitted').map((e) => `${e.evaluatorId}:${e.evaluateeId}`)
+  );
+  const isDone = (evaluatorId: string, evaluateeId: string) =>
+  submittedKeys.has(`${evaluatorId}:${evaluateeId}`);
 
-  const ranked = [...assessments].
-  filter((a) => a.selfScore > 0).
-  sort((a, b) => b.selfScore - a.selfScore);
+  const mineDone = scorable.filter((e) => isDone(me.id, e.id));
+  const mineTodo = scorable.filter((e) => !isDone(me.id, e.id));
+
+  const expected = can('manage') ? expectedEvaluations(access) : [];
+  const done = expected.filter((p) => isDone(p.evaluatorId, p.evaluateeId));
+  const completion = expected.length ? Math.round(done.length / expected.length * 100) : 0;
+  const scoringRoles = roles.filter((r) => expected.some((p) => p.roleId === r.id));
+  const teamRows = teams.filter((t) => expected.some((p) => p.teamId === t.id));
+  const waiting = Array.from(new Set(expected.map((p) => p.evaluatorId))).
+  map((evaluatorId) => ({
+    evaluatorId,
+    pending: expected.filter((p) => p.evaluatorId === evaluatorId && !isDone(p.evaluatorId, p.evaluateeId)).length
+  })).
+  filter((w) => w.pending > 0).
+  sort((a, b) => b.pending - a.pending);
+
+  const remind = (targets: typeof waiting) => {
+    targets.forEach((w) =>
+    notify({
+      type: 'reminder',
+      title: 'Reminder: finish your evaluations',
+      body: `${w.pending} evaluation${w.pending === 1 ? ' is' : 's are'} still waiting for you in ${activeCycle?.name}.`,
+      employeeId: w.evaluatorId
+    })
+    );
+    pushToast({
+      title: targets.length === 1 ? `Reminder sent to ${nameOf(targets[0].evaluatorId)}` : `Reminder sent to ${targets.length} evaluators`,
+      tone: 'success'
+    });
+  };
 
   return (
     <>
       <PageHeader
-        breadcrumb={['Workspace', 'Dashboard']}
-        title={`Good morning, ${currentUser.name.split(' ')[0]}`}
-        description="Live view of the active KPI cycle across the organization."
-        meta={
-        activeCycle &&
-        <>
-              <StatusPill status={activeCycle.status} />
-              <span className="font-mono text-2xs uppercase tracking-wider text-fgsubtle">
-                {activeCycle.name} · due {formatDate(activeCycle.dueDate)}
-              </span>
-            </>
-
+        breadcrumb={['My work', 'Dashboard']}
+        title={`Welcome, ${me.firstName}`}
+        description={
+        activeCycle ?
+        `${activeCycle.name} is open for scoring until ${formatDate(activeCycle.endDate)}.` :
+        'No evaluation cycle is open right now.'
         }
-        actions={
-        <>
-            <Link to="/reports">
-              <Button variant="secondary" size="small">
-                Export summary
-              </Button>
-            </Link>
-            <Link to="/assignments">
-              <Button size="small">Assign KPI</Button>
-            </Link>
-          </>
-        } />
+        meta={activeCycle && <StatusPill status={`${activeCycle.name} · active`} tone="positive" />} />
       
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Average score"
-          value={avg.toFixed(2)}
-          hint="of 5.00 weighted"
-          delta={2.4}
-          icon={<GaugeIcon size={15} />} />
-        
-        <StatCard
-          label="Pending reviews"
-          value={String(pending.length)}
-          hint="awaiting action"
-          icon={<ClockIcon size={15} />} />
-        
-        <StatCard
-          label="Completed"
-          value={String(completed.length)}
-          hint={`${Math.round(completed.length / assessments.length * 100)}% of assessments`}
-          delta={12}
-          icon={<ClipboardListIcon size={15} />} />
-        
-        <StatCard
-          label="Employees in cycle"
-          value={String(assessments.length)}
-          hint="across 4 departments"
-          icon={<UsersIcon size={15} />} />
-        
-      </div>
+      {!activeCycle &&
+      <Panel dashed>
+          <p className="py-6 text-center text-sm text-fgmuted">
+            Scoring is closed.{' '}
+            {can('manage') ?
+          <Link to="/cycles" className="text-fg underline underline-offset-2">
+                Open the next cycle
+              </Link> :
 
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Panel
-          title="Score trend"
-          description="Weighted average by function over the last seven cycles"
-          className="xl:col-span-2">
-          
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={scoreTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="period" {...axisProps} />
-                <YAxis domain={[3, 4.6]} {...axisProps} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="company" stroke="var(--fg)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="engineering" stroke="var(--info)" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="sales" stroke="var(--warning)" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="security" stroke="var(--positive)" strokeWidth={1.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {[
-            ['Company', 'var(--fg)'],
-            ['Engineering', 'var(--info)'],
-            ['Sales', 'var(--warning)'],
-            ['Security', 'var(--positive)']].
-            map(([label, color]) =>
-            <span key={label} className="flex items-center gap-1.5 font-mono text-2xs text-fgmuted">
-                <span className="h-0.5 w-4" style={{ backgroundColor: color }} />
-                {label}
-              </span>
-            )}
-          </div>
+          'You will be notified when HR opens the next cycle.'
+          }
+          </p>
         </Panel>
+      }
 
-        <Panel title="Score distribution" description="Employees per rating band">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={distribution} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="band" {...axisProps} tick={{ fontSize: 9 }} interval={0} angle={-20} dy={8} />
-                <YAxis {...axisProps} allowDecimals={false} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--accent-soft)' }} />
-                <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                  {distribution.map((d, i) =>
-                  <Cell
-                    key={d.band}
-                    fill={
-                    [
-                    'var(--danger)',
-                    'var(--warning)',
-                    'var(--info)',
-                    'var(--positive)',
-                    'var(--positive)'][
-                    i]
-                    } />
+      {activeCycle && can('score') &&
+      <Panel
+        title="Your scoring"
+        description={scoringLabel(access, me)}
+        className="mb-4"
+        actions={
+        <Link to="/score">
+              <Button size="small">{mineTodo.length > 0 ? 'Continue scoring' : 'Review my scores'}</Button>
+            </Link>
+        }>
+        
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <p className="text-sm text-fg">
+              <span className="font-mono text-2xl font-semibold">{mineDone.length}</span>
+              <span className="text-fgmuted"> / {scorable.length} submitted</span>
+            </p>
+            <div className="min-w-[160px] flex-1">
+              <ScoreBar
+              value={mineDone.length}
+              max={Math.max(1, scorable.length)}
+              tone={mineTodo.length === 0 ? 'positive' : 'info'}
+              showValue={false} />
+            
+            </div>
+          </div>
+          {mineTodo.length > 0 &&
+        <p className="mt-3 text-sm text-fgmuted">
+              Still to submit: {mineTodo.slice(0, 6).map(fullName).join(', ')}
+              {mineTodo.length > 6 && ` and ${mineTodo.length - 6} more`}
+            </p>
+        }
+        </Panel>
+      }
 
+      {activeCycle && can('manage') &&
+      <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+            label="People being evaluated"
+            value={String(new Set(expected.map((p) => p.evaluateeId)).size)}
+            hint={`across ${teamRows.length} teams`}
+            icon={<UsersIcon size={15} />} />
+          
+            <StatCard
+            label="Evaluations submitted"
+            value={`${done.length} / ${expected.length}`}
+            hint="all evaluators"
+            icon={<ClipboardListIcon size={15} />} />
+          
+            <StatCard
+            label="Cycle completion"
+            value={`${completion}%`}
+            hint={`closes ${formatDate(activeCycle.endDate)}`}
+            icon={<GaugeIcon size={15} />} />
+          
+            <StatCard
+            label="Deductions flagged"
+            value={String(inCycle.filter((e) => e.status === 'submitted' && e.isDeduction).length)}
+            hint="in submitted evaluations"
+            icon={<TriangleAlertIcon size={15} />} />
+          
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <Panel
+            title="Progress by team"
+            description="Submitted evaluations per evaluator role"
+            className="xl:col-span-2"
+            bodyClassName="p-0">
+            
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] border-collapse">
+                  <thead>
+                    <tr className="border-b border-line bg-surface2">
+                      <th className="px-4 py-2 text-left mono-label">Team</th>
+                      {scoringRoles.map((r) =>
+                    <th key={r.id} className="px-4 py-2 text-left mono-label">
+                          {r.name}
+                        </th>
+                    )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teamRows.map((team) =>
+                  <tr key={team.id} className="border-b border-line last:border-0">
+                        <td className="px-4 py-2.5 text-sm text-fg">{team.name}</td>
+                        {scoringRoles.map((role) => {
+                      const cell = expected.filter((p) => p.teamId === team.id && p.roleId === role.id);
+                      const cellDone = cell.filter((p) => isDone(p.evaluatorId, p.evaluateeId)).length;
+                      return (
+                        <td key={role.id} className="px-4 py-2.5">
+                              {cell.length === 0 ?
+                          <span className="text-sm text-fgsubtle">—</span> :
+
+                          <>
+                                  <p className="font-mono text-xs text-fgmuted">
+                                    {cellDone} / {cell.length}
+                                  </p>
+                                  <ScoreBar
+                              value={cellDone}
+                              max={cell.length}
+                              tone={cellDone === cell.length ? 'positive' : 'info'}
+                              showValue={false} />
+                            
+                                </>
+                          }
+                            </td>);
+
+                    })}
+                      </tr>
                   )}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-      </div>
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <Panel title="Department performance">
-          <ul className="space-y-3">
-            {departmentPerformance.map((d) =>
-            <li key={d.name}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-fg">{d.name}</span>
-                  <span className="font-mono text-xs text-fgmuted">{d.headcount} people</span>
-                </div>
-                <div className="mt-1.5">
-                  <ScoreBar value={d.score} tone={d.score >= 4.2 ? 'positive' : 'info'} />
-                </div>
-                <p className="mt-1 font-mono text-2xs text-fgsubtle">
-                  {d.completion}% cycle completion
-                </p>
-              </li>
-            )}
-          </ul>
-        </Panel>
+            <Panel
+            title="Waiting on"
+            description="Evaluators with entries still to submit"
+            actions={
+            waiting.length > 0 &&
+            <Button size="small" variant="secondary" leftIcon={<BellRingIcon size={13} />} onClick={() => remind(waiting)}>
+                    Remind all
+                  </Button>
 
-        <Panel
-          title="Leaderboard"
-          description="Top and lowest performers this cycle"
-          actions={<TrophyIcon size={15} className="text-fgsubtle" />}>
-          
-          <ol className="space-y-2">
-            {ranked.slice(0, 4).map((a, i) => {
-              const user = userById(a.userId);
-              return (
-                <li key={a.id} className="flex items-center gap-2.5">
-                  <span className="w-4 font-mono text-2xs text-fgsubtle">{i + 1}</span>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface2 font-mono text-2xs text-fg">
-                    {initials(user?.name ?? '')}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-fg">{user?.name}</span>
-                    <span className="block truncate font-mono text-2xs text-fgsubtle">
-                      {user?.position}
-                    </span>
-                  </span>
-                  <span className="font-mono text-sm text-fg">{a.selfScore.toFixed(1)}</span>
-                </li>);
+            }>
+            
+              {waiting.length === 0 ?
+            <p className="py-6 text-center text-sm text-fgmuted">Every evaluator has finished.</p> :
 
-            })}
-          </ol>
-          <div className="mt-3 border-t border-dashed border-line pt-3">
-            <p className="mono-label mb-2">Needs attention</p>
-            {ranked.slice(-2).map((a) => {
-              const user = userById(a.userId);
-              return (
-                <div key={a.id} className="flex items-center justify-between py-1">
-                  <span className="truncate text-sm text-fgmuted">{user?.name}</span>
-                  <span className="font-mono text-sm text-danger">{a.selfScore.toFixed(1)}</span>
-                </div>);
-
-            })}
-          </div>
-        </Panel>
-
-        <Panel title="Pending your action" description="Items waiting at your approval step">
-          {pending.length === 0 ?
-          <p className="py-6 text-center text-sm text-fgmuted">Nothing waiting. You are clear.</p> :
-
-          <ul className="space-y-2">
-              {pending.map((a) => {
-              const user = userById(a.userId);
-              return (
-                <li key={a.id}>
-                    <Link
-                    to={`/assessments/${a.id}`}
-                    className="flex items-center gap-2.5 rounded border border-line p-2.5 hover:bg-surface2">
-                    
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface2 font-mono text-2xs text-fg">
-                        {initials(user?.name ?? '')}
-                      </span>
+            <ul className="space-y-2">
+                  {waiting.map((w) =>
+              <li key={w.evaluatorId} className="flex items-center gap-2.5 rounded border border-line p-2.5">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm text-fg">{user?.name}</span>
+                        <span className="block truncate text-sm text-fg">{nameOf(w.evaluatorId)}</span>
                         <span className="block truncate font-mono text-2xs text-fgsubtle">
-                          Step {a.currentStep + 1} of 6 · {a.approvals[a.currentStep]?.stepName}
+                          {Array.from(new Set(grantsOf(access, w.evaluatorId).map((g) => g.role.name))).join(', ')} · {w.pending} pending
                         </span>
                       </span>
-                      <StatusPill status={a.status} />
-                    </Link>
-                  </li>);
-
-            })}
-            </ul>
-          }
-        </Panel>
-      </div>
-
-      <Panel
-        title="Performance heat map"
-        description="Individual weighted score across the last five cycles"
-        className="mt-4">
-        
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse">
-            <thead>
-              <tr>
-                <th className="px-2 py-1.5 text-left mono-label">Employee</th>
-                {['Q3 25', 'Q4 25', 'Q1 26', 'Q2 26', 'Q3 26'].map((p) =>
-                <th key={p} className="px-2 py-1.5 text-center mono-label">
-                    {p}
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {heatmap.map((row) =>
-              <tr key={row.name}>
-                  <td className="whitespace-nowrap px-2 py-1.5 text-sm text-fg">{row.name}</td>
-                  {row.scores.map((s, i) =>
-                <td key={i} className="px-1 py-1">
-                      <div
-                    className="flex h-8 items-center justify-center rounded font-mono text-2xs text-white"
-                    style={{ backgroundColor: heatTone(s) }}
-                    title={`${row.name}: ${s.toFixed(1)}`}>
-                    
-                        {s.toFixed(1)}
-                      </div>
-                    </td>
-                )}
-                </tr>
+                      <Button size="small" variant="tertiary" onClick={() => remind([w])}>
+                        Remind
+                      </Button>
+                    </li>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+                </ul>
+            }
+            </Panel>
+          </div>
+        </>
+      }
     </>);
 
 }

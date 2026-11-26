@@ -3,31 +3,24 @@ import { NavLink } from 'react-router-dom';
 import {
   ActivityIcon,
   BellIcon,
-  BuildingIcon,
   CalendarRangeIcon,
   ClipboardCheckIcon,
   FileBarChartIcon,
-  GaugeIcon,
-  GitBranchIcon,
-  LayersIcon,
   LayoutDashboardIcon,
-  ScrollTextIcon,
   SettingsIcon,
-  ShieldCheckIcon,
-  SlidersHorizontalIcon,
-  TagsIcon,
-  UserCheckIcon,
-  UsersIcon,
+  TrophyIcon,
   XIcon } from
 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, formatDate } from '../../lib/utils';
 import { useApp } from '../../lib/store';
+import { scoringLabel } from '../../lib/permissions';
 
 interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
   badge?: number;
+  show: boolean;
 }
 
 interface NavGroup {
@@ -36,52 +29,42 @@ interface NavGroup {
 }
 
 export function Sidebar({ open, onClose }: {open: boolean;onClose: () => void;}) {
-  const { assessments, notifications, branding } = useApp();
+  const { me, can, access, scorable, evaluations, activeCycle, notifications, branding } = useApp();
 
-  const pendingReviews = assessments.filter(
-    (a) => a.status === 'in-review' || a.status === 'submitted'
-  ).length;
+  const remaining = activeCycle ?
+  scorable.filter(
+    (e) =>
+    !evaluations.some(
+      (ev) =>
+      ev.cycleId === activeCycle.id &&
+      ev.evaluateeId === e.id &&
+      ev.evaluatorId === me.id &&
+      ev.status === 'submitted'
+    )
+  ).length :
+  0;
   const unread = notifications.filter((n) => !n.read).length;
 
   const groups: NavGroup[] = [
   {
-    label: 'Insight',
-    items: [
-    { to: '/', label: 'Dashboard', icon: <LayoutDashboardIcon size={15} /> },
-    { to: '/analytics', label: 'Analytics', icon: <GaugeIcon size={15} /> },
-    { to: '/reports', label: 'Reports', icon: <FileBarChartIcon size={15} /> }]
-
-  },
-  {
     label: 'My work',
     items: [
-    { to: '/my-kpi', label: 'My KPIs', icon: <ClipboardCheckIcon size={15} /> },
-    { to: '/reviews', label: 'Reviews & Approvals', icon: <UserCheckIcon size={15} />, badge: pendingReviews },
-    { to: '/notifications', label: 'Notifications', icon: <BellIcon size={15} />, badge: unread }]
+    { to: '/', label: 'Dashboard', icon: <LayoutDashboardIcon size={15} />, show: !me.external && (can('score') || can('manage')) },
+    { to: '/score', label: scoringLabel(access, me), icon: <ClipboardCheckIcon size={15} />, badge: remaining, show: can('score') },
+    { to: '/my-results', label: 'My results', icon: <TrophyIcon size={15} />, show: !me.external },
+    { to: '/notifications', label: 'Notifications', icon: <BellIcon size={15} />, badge: unread, show: true }]
 
   },
   {
-    label: 'KPI engine',
+    label: 'HR & management',
     items: [
-    { to: '/templates', label: 'Templates', icon: <LayersIcon size={15} /> },
-    { to: '/categories', label: 'Categories', icon: <TagsIcon size={15} /> },
-    { to: '/cycles', label: 'Cycles', icon: <CalendarRangeIcon size={15} /> },
-    { to: '/assignments', label: 'Assignments', icon: <ClipboardCheckIcon size={15} /> },
-    { to: '/scoring', label: 'Scoring & Formula', icon: <SlidersHorizontalIcon size={15} /> },
-    { to: '/workflows', label: 'Approval Workflow', icon: <GitBranchIcon size={15} /> }]
+    { to: '/cycles', label: 'Cycles', icon: <CalendarRangeIcon size={15} />, show: can('manage') },
+    { to: '/reports', label: 'Reports', icon: <FileBarChartIcon size={15} />, show: can('view_reports') },
+    { to: '/admin', label: 'Admin', icon: <SettingsIcon size={15} />, show: can('manage') }]
 
-  },
-  {
-    label: 'Administration',
-    items: [
-    { to: '/users', label: 'Users', icon: <UsersIcon size={15} /> },
-    { to: '/roles', label: 'Roles & Permissions', icon: <ShieldCheckIcon size={15} /> },
-    { to: '/organization', label: 'Organization', icon: <BuildingIcon size={15} /> },
-    { to: '/audit', label: 'Audit Logs', icon: <ScrollTextIcon size={15} /> },
-    { to: '/settings', label: 'Settings', icon: <SettingsIcon size={15} /> }]
-
-  }];
-
+  }].
+  map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).
+  filter((g) => g.items.length > 0);
 
   return (
     <>
@@ -156,9 +139,11 @@ export function Sidebar({ open, onClose }: {open: boolean;onClose: () => void;})
 
         <div className="border-t border-line p-3">
           <div className="rounded border border-dashed border-linestrong p-3">
-            <p className="mono-label">Engine status</p>
+            <p className="mono-label">Current cycle</p>
             <p className="mt-1 text-xs text-fgmuted">
-              Q3 2026 cycle active · locks 14 Oct 2026
+              {activeCycle ?
+              `${activeCycle.name} · scoring open until ${formatDate(activeCycle.endDate)}` :
+              'No cycle is open for scoring'}
             </p>
           </div>
         </div>

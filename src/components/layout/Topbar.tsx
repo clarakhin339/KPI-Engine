@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BellIcon,
@@ -6,38 +6,24 @@ import {
   LogOutIcon,
   MenuIcon,
   MoonIcon,
-  SearchIcon,
   SunIcon,
   UserCogIcon } from
 'lucide-react';
+import { StatusPill } from '../common/StatusPill';
 import { useApp } from '../../lib/store';
-import { cn, initials } from '../../lib/utils';
-
-const SEARCH_TARGETS = [
-{ label: 'Dashboard', to: '/' },
-{ label: 'Software Engineer KPI template', to: '/templates' },
-{ label: 'KPI Builder', to: '/templates' },
-{ label: 'Q3 2026 Performance cycle', to: '/cycles' },
-{ label: 'Users directory', to: '/users' },
-{ label: 'Roles & permissions', to: '/roles' },
-{ label: 'Approval workflow', to: '/workflows' },
-{ label: 'Audit logs', to: '/audit' },
-{ label: 'Reports', to: '/reports' }];
-
+import { grantsOf } from '../../lib/permissions';
+import { cn, formatDate, formatDateTime, fullName, initials } from '../../lib/utils';
 
 export function Topbar({ onMenu }: {onMenu: () => void;}) {
-  const { currentUser, users, roles, theme, toggleTheme, notifications, logout, switchUser } =
+  const { me, employees, access, activeCycle, theme, toggleTheme, notifications, logout, viewAs } =
   useApp();
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
   const unread = notifications.filter((n) => !n.read);
-  const role = roles.find((r) => r.id === currentUser.roleId);
-  const results = query ?
-  SEARCH_TARGETS.filter((t) => t.label.toLowerCase().includes(query.toLowerCase())) :
-  [];
+  const roleLabel = (employeeId: string) =>
+  Array.from(new Set(grantsOf(access, employeeId).map((g) => g.role.name))).join(', ') || 'Employee';
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-surface px-3 sm:px-4">
@@ -49,34 +35,16 @@ export function Topbar({ onMenu }: {onMenu: () => void;}) {
         <MenuIcon size={18} />
       </button>
 
-      <div className="relative w-full max-w-md">
-        <SearchIcon
-          size={14}
-          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fgsubtle" />
-        
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search employees, templates, cycles…"
-          aria-label="Global search"
-          className="h-8 w-full rounded border border-line bg-surface2 pl-8 pr-3 text-sm text-fg placeholder:text-fgsubtle" />
-        
-        {results.length > 0 &&
-        <ul className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded border border-line bg-surface shadow-lg">
-            {results.map((r) =>
-          <li key={r.label}>
-                <button
-              onClick={() => {
-                navigate(r.to);
-                setQuery('');
-              }}
-              className="block w-full px-3 py-2 text-left text-sm text-fg hover:bg-surface2">
-              
-                  {r.label}
-                </button>
-              </li>
-          )}
-          </ul>
+      <div className="flex min-w-0 items-center gap-2">
+        {activeCycle ?
+        <>
+            <StatusPill status={activeCycle.name} tone="positive" />
+            <span className="hidden truncate text-xs text-fgmuted sm:block">
+              Scoring open until {formatDate(activeCycle.endDate)}
+            </span>
+          </> :
+
+        <StatusPill status="No active cycle" tone="neutral" />
         }
       </div>
 
@@ -112,7 +80,7 @@ export function Topbar({ onMenu }: {onMenu: () => void;}) {
                 
                     <p className="text-sm font-medium text-fg">{n.title}</p>
                     <p className="mt-0.5 text-xs text-fgmuted">{n.body}</p>
-                    <p className="mt-1 font-mono text-2xs text-fgsubtle">{n.at}</p>
+                    <p className="mt-1 font-mono text-2xs text-fgsubtle">{formatDateTime(n.at)}</p>
                   </li>
               )}
               </ul>
@@ -137,39 +105,38 @@ export function Topbar({ onMenu }: {onMenu: () => void;}) {
             aria-label="Account menu">
             
             <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface2 font-mono text-2xs text-fg">
-              {initials(currentUser.name)}
+              {initials(fullName(me))}
             </span>
             <span className="hidden text-left sm:block">
-              <span className="block text-xs font-medium leading-tight text-fg">
-                {currentUser.name}
-              </span>
+              <span className="block text-xs font-medium leading-tight text-fg">{fullName(me)}</span>
               <span className="block font-mono text-2xs uppercase tracking-wider text-fgsubtle">
-                {role?.name}
+                {roleLabel(me.id)}
               </span>
             </span>
             <ChevronDownIcon size={13} className="text-fgsubtle" />
           </button>
           {menuOpen &&
-          <div className="absolute right-0 z-30 mt-1 w-64 rounded border border-line bg-surface p-2 shadow-lg">
-              <p className="mono-label px-2 pb-1">Simulate role</p>
-              <ul className="max-h-56 overflow-y-auto">
-                {users.slice(0, 10).map((u) =>
-              <li key={u.id}>
+          <div className="absolute right-0 z-30 mt-1 w-72 rounded border border-line bg-surface p-2 shadow-lg">
+              <p className="mono-label px-2 pb-1">Demo · view as</p>
+              <ul className="max-h-64 overflow-y-auto">
+                {employees.
+              filter((e) => e.status === 'active').
+              map((e) =>
+              <li key={e.id}>
                     <button
                   onClick={() => {
-                    switchUser(u.id);
+                    viewAs(e.id);
                     setMenuOpen(false);
+                    navigate('/');
                   }}
                   className={cn(
                     'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface2',
-                    u.id === currentUser.id ? 'text-fg' : 'text-fgmuted'
+                    e.id === me.id ? 'bg-accentsoft text-fg' : 'text-fgmuted'
                   )}>
                   
-                      <UserCogIcon size={13} />
-                      <span className="flex-1 truncate">{u.name}</span>
-                      <span className="font-mono text-2xs text-fgsubtle">
-                        {roles.find((r) => r.id === u.roleId)?.name}
-                      </span>
+                      <UserCogIcon size={13} className="shrink-0" />
+                      <span className="flex-1 truncate">{fullName(e)}</span>
+                      <span className="shrink-0 font-mono text-2xs text-fgsubtle">{roleLabel(e.id)}</span>
                     </button>
                   </li>
               )}
