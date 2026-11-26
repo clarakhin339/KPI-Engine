@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  ActivityIcon,
   BellIcon,
   CalendarRangeIcon,
   ClipboardCheckIcon,
@@ -82,8 +81,8 @@ export function Sidebar({ open, onClose }: {open: boolean;onClose: () => void;})
         )}>
         
         <div className="flex h-14 items-center gap-2 border-b border-line px-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded border border-linestrong bg-surface2">
-            <ActivityIcon size={15} className="text-fg" />
+          <div className="flex h-9 w-11 items-center justify-center rounded border border-linestrong bg-surface2">
+            <img src="/1cng.svg" alt="KPI Engine Logo" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-tight text-fg">

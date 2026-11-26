@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  ActivityIcon,
+  
   ArrowLeftIcon,
   KeyRoundIcon,
   MailCheckIcon,
@@ -9,6 +9,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useApp } from '../lib/store';
+const logo = '/1cng.svg';
 
 type Screen = 'login' | 'twofa' | 'forgot' | 'sent' | 'reset';
 
@@ -59,8 +60,8 @@ export function LoginPage() {
       <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12">
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded border border-linestrong bg-surface">
-              <ActivityIcon size={16} className="text-fg" />
+            <div className="flex h-10 w-12 items-center justify-center rounded border border-linestrong bg-surface">
+             <img src={logo} alt="KPI Engine Logo" />
             </div>
             <div>
               <p className="text-sm font-semibold leading-tight text-fg">KPI Engine</p>
