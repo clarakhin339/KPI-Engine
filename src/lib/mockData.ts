@@ -27,9 +27,9 @@ export const branches: Branch[] = [
 
 export const teams: Team[] = [
 { id: 't-1', name: 'Sales', branchId: 'b-1' },
-{ id: 't-2', name: 'Cloud Engineering', branchId: 'b-1' },
+{ id: 't-2', name: 'System', branchId: 'b-1' },
 { id: 't-3', name: 'People & Culture', branchId: 'b-1' },
-{ id: 't-4', name: 'Network Operations', branchId: 'b-2' },
+{ id: 't-4', name: 'Network', branchId: 'b-2' },
 { id: 't-5', name: 'IP Core', branchId: 'b-2' },
 { id: 't-6', name: 'Management Office', branchId: 'b-1' }];
 
@@ -44,7 +44,7 @@ export const ranks: Rank[] = [
 
 
 export const positions: Position[] = [
-{ id: 'p-1', title: 'Engineer' },
+{ id: 'p-1', title: 'System Engineer' },
 { id: 'p-2', title: 'Network Engineer' },
 { id: 'p-3', title: 'Analyst' },
 { id: 'p-4', title: 'Account Executive' },

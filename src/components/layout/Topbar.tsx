@@ -15,15 +15,25 @@ import { grantsOf } from '../../lib/permissions';
 import { cn, formatDate, formatDateTime, fullName, initials } from '../../lib/utils';
 
 export function Topbar({ onMenu }: {onMenu: () => void;}) {
-  const { me, employees, access, activeCycle, theme, toggleTheme, notifications, logout, viewAs } =
+  const { me, employees, access, activeCycle, theme, toggleTheme, notifications, logout, viewAs, teamById } =
   useApp();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
   const unread = notifications.filter((n) => !n.read);
-  const roleLabel = (employeeId: string) =>
-  Array.from(new Set(grantsOf(access, employeeId).map((g) => g.role.name))).join(', ') || 'Employee';
+  const roleLabel = (employeeId: string) => {
+    const byRole = new Map<string, string[]>();
+    for (const g of grantsOf(access, employeeId)) {
+      const team = g.assignment.teamId ? teamById(g.assignment.teamId)?.name ?? '' : null;
+      byRole.set(g.role.name, [...(byRole.get(g.role.name) ?? []), ...(team ? [team] : [])]);
+    }
+    return (
+      Array.from(byRole.entries()).
+      map(([role, teamList]) => teamList.length === 1 ? `${role} · ${teamList[0]}` : role).
+      join(', ') || 'Employee'
+    );
+  };
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-surface px-3 sm:px-4">
@@ -136,7 +146,7 @@ export function Topbar({ onMenu }: {onMenu: () => void;}) {
                   
                       <UserCogIcon size={13} className="shrink-0" />
                       <span className="flex-1 truncate">{fullName(e)}</span>
-                      <span className="shrink-0 font-mono text-2xs text-fgsubtle">{roleLabel(e.id)}</span>
+                      <span className="max-w-36 shrink-0 truncate font-mono text-2xs text-fgsubtle">{roleLabel(e.id)}</span>
                     </button>
                   </li>
               )}
