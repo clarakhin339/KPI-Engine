@@ -58,9 +58,9 @@ base: PermissionAction[] = [])
 /* ------------------------------------------------------------------ */
 
 export const orgNodes: OrgNode[] = [
-{ id: 'org-1', name: 'Northwind Technologies', type: 'company', parentId: null, code: 'NWT', headId: 'u-1' },
-{ id: 'org-2', name: 'Jakarta HQ', type: 'branch', parentId: 'org-1', code: 'NWT-JKT', headId: 'u-2' },
-{ id: 'org-3', name: 'Singapore Office', type: 'branch', parentId: 'org-1', code: 'NWT-SG', headId: 'u-9' },
+{ id: 'org-1', name: 'One Cloud Next Gen', type: 'company', parentId: null, code: 'OCNG', headId: 'u-1' },
+{ id: 'org-2', name: 'Jakarta HQ', type: 'branch', parentId: 'org-1', code: 'OCNG-JKT', headId: 'u-2' },
+{ id: 'org-3', name: 'Singapore Office', type: 'branch', parentId: 'org-1', code: 'OCNG-SG', headId: 'u-9' },
 { id: 'org-4', name: 'Technology Division', type: 'division', parentId: 'org-2', code: 'DIV-TECH', headId: 'u-2' },
 { id: 'org-5', name: 'Commercial Division', type: 'division', parentId: 'org-2', code: 'DIV-COM', headId: 'u-9' },
 { id: 'org-6', name: 'Engineering', type: 'department', parentId: 'org-4', code: 'ENG', headId: 'u-3' },

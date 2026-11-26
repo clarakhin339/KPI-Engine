@@ -60,7 +60,7 @@ export function LoginPage() {
             <div>
               <p className="text-sm font-semibold leading-tight text-fg">KPI Engine</p>
               <p className="font-mono text-2xs uppercase tracking-wider text-fgsubtle">
-                Northwind Technologies
+                One Cloud Next Gen
               </p>
             </div>
           </div>

@@ -117,7 +117,7 @@ export function AppProvider({ children }: {children: React.ReactNode;}) {
   const [notifications, setNotifications] = useState<AppNotification[]>(seed.notifications);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [branding, setBranding] = useState<Branding>({
-    companyName: 'Northwind Technologies',
+    companyName: 'One Cloud Next Gen',
     productName: 'KPI Engine',
     locale: 'en-GB',
     timezone: 'Asia/Jakarta',
