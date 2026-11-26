@@ -9,7 +9,7 @@ const CAPABILITY_INFO: {id: Capability;label: string;hint: string;}[] = [
 { id: 'score', label: 'Score', hint: 'Can enter scores and comments' },
 { id: 'score_team_lead', label: 'Score team leads', hint: 'May also score the person leading the team' },
 { id: 'edit_own', label: 'Edit own entries', hint: 'May change submitted entries they wrote' },
-{ id: 'edit_others', label: 'Revise others', hint: 'May revise submitted entries written by other roles' },
+{ id: 'edit_others', label: 'Revise others', hint: 'May revise any submitted entry written by another evaluator' },
 { id: 'view_reports', label: 'View reports', hint: 'Sees the cycle summary reports' },
 { id: 'manage', label: 'Manage', hint: 'Full administration: cycles, employees and configuration' }];
 

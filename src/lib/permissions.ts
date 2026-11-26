@@ -80,7 +80,7 @@ export function scoringLabel(data: AccessData, user: Employee): string {
   return global ? 'Score employees' : 'Score my team';
 }
 
-/** Whether `userId` may revise entries written by other evaluators for this employee (HR). */
+/** Whether `userId` may revise entries written by any evaluator for this employee (HR). */
 function canReviseOthers(data: AccessData, userId: ID, evaluatee: Employee | undefined): boolean {
   return (
     !!evaluatee &&
@@ -102,10 +102,7 @@ cycle: EvaluationCycle | undefined)
     return evaluation.status === 'draft' || !!role?.capabilities.includes('edit_own');
   }
   const evaluatee = data.employees.find((e) => e.id === evaluation.evaluateeId);
-  return (
-    evaluation.status === 'submitted' &&
-    !role?.capabilities.includes('edit_others') &&
-    canReviseOthers(data, userId, evaluatee));
+  return evaluation.status === 'submitted' && canReviseOthers(data, userId, evaluatee);
 
 }
 
