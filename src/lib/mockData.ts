@@ -7,7 +7,6 @@ import type {
   Employee,
   Evaluation,
   EvaluationCycle,
-  EvaluationStatus,
   Position,
   Rank,
   ReviewSummary,
@@ -236,13 +235,6 @@ const DEDUCTIONS = [
 
 const BASE_SCORE: Record<string, number> = { 'e-18': 46, 'e-9': 55, 'e-11': 91 };
 
-const ACTIVE_SUBMITTED_PCT: Record<string, number> = {
-  'r-tl': 70,
-  'r-pm': 40,
-  'r-cust': 50,
-  'r-hr': 10
-};
-
 function hash(text: string) {
   let h = 7;
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) % 99991;
@@ -252,9 +244,12 @@ function hash(text: string) {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function seedEvaluations(): Evaluation[] {
+  /* History only: closed cycles get a complete set of submitted entries.
+     The active cycle starts empty — fabricated entries would look like work
+     the person never did, no matter who you sign in as. */
   const pairs = expectedEvaluations({ employees, roles, assignments });
   return cycles.
-  filter((c) => c.status !== 'upcoming').
+  filter((c) => c.status === 'closed').
   flatMap((cycle) =>
   pairs.flatMap((pair) => {
     const evaluatee = employees.find((e) => e.id === pair.evaluateeId);
@@ -263,18 +258,10 @@ function seedEvaluations(): Evaluation[] {
     if (evaluatee.hireDate > cycle.endDate || evaluator.hireDate > cycle.endDate) return [];
 
     const h = hash(`${cycle.id}:${pair.evaluatorId}:${pair.evaluateeId}`);
-    let status: EvaluationStatus = 'submitted';
-    if (cycle.status === 'active') {
-      const submittedPct = ACTIVE_SUBMITTED_PCT[pair.roleId] ?? 0;
-      const roll = h % 100;
-      if (roll >= submittedPct + 15) return [];
-      if (roll >= submittedPct) status = 'draft';
-    }
-
     const isDeduction = h % 11 === 0;
     const base = BASE_SCORE[evaluatee.id] ?? 60 + hash(evaluatee.id) % 32;
     const score = Math.max(30, Math.min(99, base + h % 11 - 5 - (isDeduction ? 10 : 0)));
-    const month = cycle.status === 'active' ? '11' : cycle.half === 'H1' ? '06' : '12';
+    const month = cycle.half === 'H1' ? '06' : '12';
     const at = `${cycle.year}-${month}-${pad(1 + h % 24)}T${pad(2 + h % 8)}:${pad(h % 60)}:00Z`;
 
     return [
@@ -289,7 +276,7 @@ function seedEvaluations(): Evaluation[] {
       comment: isDeduction ? DEDUCTIONS[h % DEDUCTIONS.length] : PRAISE[h % PRAISE.length],
       commentDate: at,
       lastModified: at,
-      status
+      status: 'submitted'
     }];
 
   })
@@ -311,15 +298,12 @@ map((e) => summarise(cycle.id, e.id, evaluations, bands))
 /* ------------------------------------------------------------------ */
 
 export const auditLogs: AuditLog[] = [
-{ id: 'al-1', at: '2026-11-25T03:12:04Z', actorId: 'e-5', action: 'Submitted evaluation', module: 'Evaluations', entity: 'H2 2026 · Su Myat', severity: 'info' },
-{ id: 'al-2', at: '2026-11-24T08:41:10Z', actorId: 'e-1', action: 'Revised evaluation', module: 'Evaluations', entity: 'H2 2026 · Wai Yan (entry by Aye Chan) · Reason: score entered against wrong employee', severity: 'warning' },
-{ id: 'al-3', at: '2026-11-20T02:30:12Z', actorId: 'e-3', action: 'Saved draft evaluation', module: 'Evaluations', entity: 'H2 2026 · Zaw Lin', severity: 'info' },
-{ id: 'al-4', at: '2026-11-18T05:02:55Z', actorId: 'e-1', action: 'Assigned role', module: 'Roles', entity: 'Daniel Tan · Customer · Sales', severity: 'warning' },
-{ id: 'al-5', at: '2026-11-03T04:15:48Z', actorId: 'e-2', action: 'Imported employees', module: 'Employees', entity: '2 records', severity: 'info' },
-{ id: 'al-6', at: '2026-10-14T09:07:33Z', actorId: 'e-1', action: 'Deactivated employee', module: 'Employees', entity: 'Pyae Sone (OCNG-1022)', severity: 'warning' },
-{ id: 'al-7', at: '2026-07-09T04:00:00Z', actorId: 'e-1', action: 'Closed cycle', module: 'Cycles', entity: 'H1 2026 · results published', severity: 'critical' },
-{ id: 'al-8', at: '2026-07-01T01:00:00Z', actorId: 'e-1', action: 'Activated cycle', module: 'Cycles', entity: 'H2 2026', severity: 'info' },
-{ id: 'al-9', at: '2026-06-28T07:44:02Z', actorId: 'e-1', action: 'Updated score band', module: 'Score bands', entity: 'Half Bonus · 50–79', severity: 'warning' }];
+{ id: 'al-1', at: '2026-11-18T05:02:55Z', actorId: 'e-1', action: 'Assigned role', module: 'Roles', entity: 'Daniel Tan · Customer · Sales', severity: 'warning' },
+{ id: 'al-2', at: '2026-11-03T04:15:48Z', actorId: 'e-2', action: 'Imported employees', module: 'Employees', entity: '2 records', severity: 'info' },
+{ id: 'al-3', at: '2026-10-14T09:07:33Z', actorId: 'e-1', action: 'Deactivated employee', module: 'Employees', entity: 'Pyae Sone (OCNG-1022)', severity: 'warning' },
+{ id: 'al-4', at: '2026-07-09T04:00:00Z', actorId: 'e-1', action: 'Closed cycle', module: 'Cycles', entity: 'H1 2026 · results published', severity: 'critical' },
+{ id: 'al-5', at: '2026-07-01T01:00:00Z', actorId: 'e-1', action: 'Activated cycle', module: 'Cycles', entity: 'H2 2026', severity: 'info' },
+{ id: 'al-6', at: '2026-06-28T07:44:02Z', actorId: 'e-1', action: 'Updated score band', module: 'Score bands', entity: 'Exceeds Expectations · 80–89', severity: 'warning' }];
 
 
 export const notifications: AppNotification[] = [
