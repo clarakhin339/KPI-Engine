@@ -83,7 +83,7 @@ export function LoginPage() {
                 label="Work email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 error={error && !email.includes('@') ? error : undefined}
                 autoComplete="email" />
               
@@ -91,7 +91,7 @@ export function LoginPage() {
                 label="Password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 autoComplete="current-password" />
               
                 <div className="flex items-center justify-between">
@@ -99,7 +99,7 @@ export function LoginPage() {
                     <input
                     type="checkbox"
                     checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemember(e.target.checked)}
                     className="h-3.5 w-3.5" />
                   
                     Remember this device for 30 days
@@ -147,7 +147,7 @@ export function LoginPage() {
                 inputMode="numeric"
                 maxLength={6}
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCode(e.target.value)}
                 placeholder="000000"
                 error={error || undefined}
                 helperText="Codes rotate every 30 seconds." />
@@ -190,7 +190,7 @@ export function LoginPage() {
                 label="Work email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)} />
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
               
               </div>
               <Button type="submit" className="mt-6 w-full">
