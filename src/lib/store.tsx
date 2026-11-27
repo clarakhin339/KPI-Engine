@@ -42,6 +42,96 @@ interface Branding {
   dateFormat: string;
 }
 
+type Theme = 'light' | 'dark';
+
+interface PersistedData {
+  branches: Branch[];
+  teams: Team[];
+  ranks: Rank[];
+  positions: Position[];
+  employees: Employee[];
+  roles: Role[];
+  assignments: RoleAssignment[];
+  cycles: EvaluationCycle[];
+  evaluations: Evaluation[];
+  bands: ScoreBand[];
+  summaries: ReviewSummary[];
+  auditLogs: AuditLog[];
+  notifications: AppNotification[];
+  branding: Branding;
+  theme: Theme;
+}
+
+const STORAGE_KEY = 'kpi-engine:data:v1';
+const STORAGE_VERSION = 1;
+
+function seedData(): PersistedData {
+  return {
+    branches: seed.branches,
+    teams: seed.teams,
+    ranks: seed.ranks,
+    positions: seed.positions,
+    employees: seed.employees,
+    roles: seed.roles,
+    assignments: seed.assignments,
+    cycles: seed.cycles,
+    evaluations: seed.evaluations,
+    bands: seed.bands,
+    summaries: seed.summaries,
+    auditLogs: seed.auditLogs,
+    notifications: seed.notifications,
+    branding: {
+      companyName: 'One Cloud Next Gen',
+      productName: 'KPI Evaluation',
+      locale: 'en-GB',
+      timezone: 'Asia/Yangon',
+      dateFormat: 'DD MMM YYYY'
+    },
+    theme: 'light'
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function savedArray<T>(value: unknown, fallback: T[]): T[] {
+  return Array.isArray(value) ? value as T[] : fallback;
+}
+
+function loadInitialData(): PersistedData {
+  const fallback = seedData();
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return fallback;
+    const envelope: unknown = JSON.parse(raw);
+    if (!isRecord(envelope) || envelope.version !== STORAGE_VERSION || !isRecord(envelope.data)) {
+      return fallback;
+    }
+    const data = envelope.data;
+    return {
+      branches: savedArray(data.branches, fallback.branches),
+      teams: savedArray(data.teams, fallback.teams),
+      ranks: savedArray(data.ranks, fallback.ranks),
+      positions: savedArray(data.positions, fallback.positions),
+      employees: savedArray(data.employees, fallback.employees),
+      roles: savedArray(data.roles, fallback.roles),
+      assignments: savedArray(data.assignments, fallback.assignments),
+      cycles: savedArray(data.cycles, fallback.cycles),
+      evaluations: savedArray(data.evaluations, fallback.evaluations),
+      bands: savedArray(data.bands, fallback.bands),
+      summaries: savedArray(data.summaries, fallback.summaries),
+      auditLogs: savedArray(data.auditLogs, fallback.auditLogs),
+      notifications: savedArray(data.notifications, fallback.notifications),
+      branding: isRecord(data.branding) ? { ...fallback.branding, ...data.branding } as Branding : fallback.branding,
+      theme: data.theme === 'light' || data.theme === 'dark' ? data.theme : fallback.theme
+    };
+  } catch (error) {
+    console.warn('Unable to load saved KPI Engine data.', error);
+    return fallback;
+  }
+}
+
 export interface EvaluationInput {
   score: number;
   comment: string;
@@ -59,7 +149,7 @@ interface AppState {
   viewAs: (employeeId: ID) => void;
 
   /* theme */
-  theme: 'light' | 'dark';
+  theme: Theme;
   toggleTheme: () => void;
 
   /* data */
@@ -106,6 +196,7 @@ interface AppState {
   notify: (n: Pick<AppNotification, 'type' | 'title' | 'body' | 'employeeId'>) => void;
   markNotificationsRead: () => void;
   logAction: (action: string, module: string, entity: string, severity?: AuditLog['severity']) => void;
+  resetData: () => void;
 
   /* lookups */
   employeeById: (id: ID | null | undefined) => Employee | undefined;
@@ -126,35 +217,71 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: {children: React.ReactNode;}) {
+  const [initialData] = useState<PersistedData>(loadInitialData);
   const [authenticated, setAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('e-1');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<Theme>(initialData.theme);
 
-  const [branches, setBranches] = useState<Branch[]>(seed.branches);
-  const [teams, setTeams] = useState<Team[]>(seed.teams);
-  const [ranks, setRanks] = useState<Rank[]>(seed.ranks);
-  const [positions, setPositions] = useState<Position[]>(seed.positions);
-  const [employees, setEmployees] = useState<Employee[]>(seed.employees);
-  const [roles, setRoles] = useState<Role[]>(seed.roles);
-  const [assignments, setAssignments] = useState<RoleAssignment[]>(seed.assignments);
-  const [cycles, setCycles] = useState<EvaluationCycle[]>(seed.cycles);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>(seed.evaluations);
-  const [bands, setBands] = useState<ScoreBand[]>(seed.bands);
-  const [summaries, setSummaries] = useState<ReviewSummary[]>(seed.summaries);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(seed.auditLogs);
-  const [allNotifications, setNotifications] = useState<AppNotification[]>(seed.notifications);
+  const [branches, setBranches] = useState<Branch[]>(initialData.branches);
+  const [teams, setTeams] = useState<Team[]>(initialData.teams);
+  const [ranks, setRanks] = useState<Rank[]>(initialData.ranks);
+  const [positions, setPositions] = useState<Position[]>(initialData.positions);
+  const [employees, setEmployees] = useState<Employee[]>(initialData.employees);
+  const [roles, setRoles] = useState<Role[]>(initialData.roles);
+  const [assignments, setAssignments] = useState<RoleAssignment[]>(initialData.assignments);
+  const [cycles, setCycles] = useState<EvaluationCycle[]>(initialData.cycles);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>(initialData.evaluations);
+  const [bands, setBands] = useState<ScoreBand[]>(initialData.bands);
+  const [summaries, setSummaries] = useState<ReviewSummary[]>(initialData.summaries);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialData.auditLogs);
+  const [allNotifications, setNotifications] = useState<AppNotification[]>(initialData.notifications);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [branding, setBranding] = useState<Branding>({
-    companyName: 'One Cloud Next Gen',
-    productName: 'KPI Evaluation',
-    locale: 'en-GB',
-    timezone: 'Asia/Yangon',
-    dateFormat: 'DD MMM YYYY'
-  });
+  const [branding, setBranding] = useState<Branding>(initialData.branding);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
+
+  useEffect(() => {
+    const data: PersistedData = {
+      branches,
+      teams,
+      ranks,
+      positions,
+      employees,
+      roles,
+      assignments,
+      cycles,
+      evaluations,
+      bands,
+      summaries,
+      auditLogs,
+      notifications: allNotifications,
+      branding,
+      theme
+    };
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, data }));
+    } catch (error) {
+      console.warn('Unable to save KPI Engine data to localStorage.', error);
+    }
+  }, [
+    branches,
+    teams,
+    ranks,
+    positions,
+    employees,
+    roles,
+    assignments,
+    cycles,
+    evaluations,
+    bands,
+    summaries,
+    auditLogs,
+    allNotifications,
+    branding,
+    theme
+  ]);
 
   const me = employees.find((e) => e.id === currentUserId) ?? employees[0];
   const access: AccessData = { employees, roles, assignments };
@@ -186,6 +313,31 @@ export function AppProvider({ children }: {children: React.ReactNode;}) {
     { ...n, id: uid('n'), at: new Date().toISOString(), read: false },
     ...prev]
     );
+  };
+
+  const resetData = () => {
+    const fresh = seedData();
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Unable to clear saved KPI Engine data.', error);
+    }
+    setCurrentUserId('e-1');
+    setTheme(fresh.theme);
+    setBranches(fresh.branches);
+    setTeams(fresh.teams);
+    setRanks(fresh.ranks);
+    setPositions(fresh.positions);
+    setEmployees(fresh.employees);
+    setRoles(fresh.roles);
+    setAssignments(fresh.assignments);
+    setCycles(fresh.cycles);
+    setEvaluations(fresh.evaluations);
+    setBands(fresh.bands);
+    setSummaries(fresh.summaries);
+    setAuditLogs(fresh.auditLogs);
+    setNotifications(fresh.notifications);
+    setBranding(fresh.branding);
   };
 
   const validate = (input: EvaluationInput, requireComment: boolean) => {
@@ -388,6 +540,7 @@ export function AppProvider({ children }: {children: React.ReactNode;}) {
     prev.map((n) => n.employeeId === null || n.employeeId === me.id ? { ...n, read: true } : n)
     ),
     logAction,
+    resetData,
     employeeById,
     nameOf,
     teamById: (id) => teams.find((t) => t.id === id),

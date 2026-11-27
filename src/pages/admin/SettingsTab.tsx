@@ -1,14 +1,16 @@
-import type { ChangeEvent } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { MonitorIcon } from 'lucide-react';
 import { Panel } from '../../components/common/Panel';
 import { Button } from '../../components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from '../../components/ui/Dialog';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { useApp } from '../../lib/store';
 import { cn } from '../../lib/utils';
 
 export function SettingsTab() {
-  const { branding, setBranding, theme, toggleTheme, pushToast, logAction } = useApp();
+  const { branding, setBranding, theme, toggleTheme, pushToast, logAction, resetData } = useApp();
+  const [resetOpen, setResetOpen] = useState(false);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -94,11 +96,14 @@ export function SettingsTab() {
 
       <Panel title="About this workspace" dashed>
         <p className="text-sm text-fgmuted">
-          This prototype keeps data in the browser — refresh resets to the seed data. When the
-          NestJS backend is connected, sign-in, permissions and audit records will be enforced
-          by the server instead.
+          This prototype keeps data in this browser using localStorage, so changes survive refreshes
+          on this device. Data is not shared with other browsers or users. When the NestJS backend
+          is connected, sign-in, permissions and audit records will be enforced by the server instead.
         </p>
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
+          <Button size="small" variant="secondary" onClick={() => setResetOpen(true)}>
+            Reset demo data
+          </Button>
           <Button
             size="small"
             onClick={() => {
@@ -110,6 +115,32 @@ export function SettingsTab() {
           </Button>
         </div>
       </Panel>
+
+      <Dialog isOpen={resetOpen} onClose={() => setResetOpen(false)} size="sm">
+        <DialogHeader>
+          <h2 className="text-base font-semibold text-fg">Reset demo data?</h2>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-sm text-fgmuted">
+            All changes saved in this browser will be removed and the original employees, roles,
+            cycles, evaluations and settings will be restored. This cannot be undone.
+          </p>
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setResetOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              resetData();
+              setResetOpen(false);
+              pushToast({ title: 'Demo data reset', tone: 'success' });
+            }}>
+            Reset all data
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>);
 
 }
